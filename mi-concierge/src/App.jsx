@@ -23,6 +23,8 @@ import {
   Globe,
   Heart,
   Shield,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 /* ============================================================
@@ -58,109 +60,160 @@ const CATEGORIES = [
 const catIcon = (id) =>
   (CATEGORIES.find((c) => c.id === id) || CATEGORIES[5]).Icon;
 
-/* --------- Seed Data --------- */
-const seedPosts = [
-  {
-    id: "p1",
-    author: { name: "Lena Hoffmann", initials: "LH", role: "tourist", from: "Berlin" },
-    destination: "Lisbon, PT",
-    category: "food",
-    title: "Where do Lisboetas actually eat seafood?",
-    body: "Tired of tourist menus near Cais do Sodré. I want the place where the fishermen go for lunch — petiscos, vinho verde, no English menu, plastic chairs encouraged.",
-    posted: "2h",
-    responses: [
-      {
-        id: "r1",
-        author: { name: "Tiago Marques", initials: "TM", role: "local", from: "Lisbon" },
-        body: "Skip Ramiro on the weekend — it's a queue. Take the ferry from Cais do Sodré to Cacilhas and walk five minutes to Ponto Final. Order arroz de marisco for two, share. Cash only. Tell them Tiago sent you and ask about the catch of the day.",
-        posted: "1h",
-        rating: 5,
-        tipped: true,
-        tipAmount: 8,
-      },
-      {
-        id: "r2",
-        author: { name: "Beatriz S.", initials: "BS", role: "local", from: "Almada" },
-        body: "Cervejaria O Pinóquio in Praça dos Restauradores — looks touristy but the locals fill it by 1pm. Get the percebes if they have them.",
-        posted: "45m",
-        rating: 0,
-        tipped: false,
-        tipAmount: 0,
-      },
-    ],
-  },
-  {
-    id: "p2",
-    author: { name: "Marco Renaldi", initials: "MR", role: "tourist", from: "Milan" },
-    destination: "Kyoto, JP",
-    category: "hidden",
-    title: "A temple that isn't on Google's first page",
-    body: "I have three days. I've done Fushimi Inari at sunrise. Looking for somewhere quieter — moss gardens, a place where I can sit and not see a selfie stick.",
-    posted: "6h",
-    responses: [
-      {
-        id: "r3",
-        author: { name: "Yuki Tanaka", initials: "YT", role: "local", from: "Kyoto" },
-        body: "Saihō-ji (the Moss Temple) — but you must apply by postcard 2 weeks ahead. Easier alternative: Enkō-ji in northern Higashiyama. Tiny, hand-raked garden, maybe four other visitors on a Tuesday. Go at 4pm for the light.",
-        posted: "4h",
-        rating: 5,
-        tipped: false,
-        tipAmount: 0,
-      },
-    ],
-  },
-  {
-    id: "p3",
-    author: { name: "Amara Okafor", initials: "AO", role: "tourist", from: "London" },
-    destination: "Mexico City, MX",
-    category: "nightlife",
-    title: "Mezcal bar that isn't full of expats",
-    body: "Polanco and Roma Norte feel like a different city. Want somewhere with a record player, no English menu, and ideally a bartender who'll tell me what to drink.",
-    posted: "1d",
-    responses: [],
-  },
-  {
-    id: "p4",
-    author: { name: "Sofia Reyes", initials: "SR", role: "tourist", from: "Barcelona" },
-    destination: "Marrakech, MA",
-    category: "shopping",
-    title: "Rugs without the markup",
-    body: "The medina is overwhelming. I'd rather pay a fair price than 'haggle' down from triple. Where do interior designers actually buy from?",
-    posted: "2d",
-    responses: [
-      {
-        id: "r4",
-        author: { name: "Hicham El Idrissi", initials: "HE", role: "local", from: "Marrakech" },
-        body: "Skip the souk entirely. Go to Sidi Ghanem (the industrial zone) — Chabi Chic and Maison ARTC have showrooms with marked prices. For vintage Beni Ourain, ask for Mustapha at the rug coop in Tameslouht, 30 min south. He'll show you the pile from the back.",
-        posted: "1d",
-        rating: 4,
-        tipped: true,
-        tipAmount: 15,
-      },
-    ],
-  },
-];
+/* ============================================================
+   API CLIENT
+   Base URL from env var; falls back to localhost for dev.
+   JWT is stored in localStorage and a module-level variable
+   so every request picks it up automatically.
+============================================================ */
 
-const seedMe = {
-  id: "u_me",
-  name: "Your Name",
-  initials: "YN",
-  role: "tourist",
-  from: "—",
-  bio: "Just landed.",
-  joined: "May 2026",
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+let _token = null;
+
+function setToken(t) {
+  _token = t;
+  if (t) localStorage.setItem("jwt", t);
+  else localStorage.removeItem("jwt");
+}
+
+function loadStoredToken() {
+  const t = localStorage.getItem("jwt");
+  if (t) _token = t;
+  return t;
+}
+
+async function request(method, path, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (_token) headers["Authorization"] = `Bearer ${_token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 204) return null;
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data.detail || `Error ${res.status}`);
+  }
+
+  return data;
+}
+
+const api = {
+  get:    (path)       => request("GET",    path),
+  post:   (path, body) => request("POST",   path, body),
+  patch:  (path, body) => request("PATCH",  path, body),
+  delete: (path)       => request("DELETE", path),
 };
 
-/* ============================================================ */
+/* ============================================================
+   HELPERS — map backend shapes to frontend shapes
+============================================================ */
+
+function mapUser(u) {
+  if (!u) return null;
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    city: u.city || "—",
+    // frontend uses "from" everywhere
+    from: u.city || "—",
+    initials: u.name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() || "")
+      .join(""),
+    joined: new Date(u.created_at).toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    }),
+  };
+}
+
+function mapPost(p) {
+  if (!p) return null;
+  return {
+    id: p.id,
+    // backend uses "content", frontend uses "body"
+    body: p.content,
+    title: p.title,
+    // backend uses "city", frontend uses "destination"
+    destination: p.city,
+    category: p.category,
+    author: mapUser(p.author),
+    author_id: p.author_id,
+    posted: formatRelative(p.created_at),
+    responses: (p.responses || []).map(mapResponse),
+  };
+}
+
+function mapResponse(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    body: r.content,
+    post_id: r.post_id,
+    author_id: r.author_id,
+    author: mapUser(r.author),
+    posted: formatRelative(r.created_at),
+    // rating & tip are fetched/merged separately
+    rating: r.rating ?? 0,
+    tipped: r.tipped ?? false,
+    tipAmount: r.tipAmount ?? 0,
+  };
+}
+
+function formatRelative(iso) {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+/* ============================================================
+   APP
+============================================================ */
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [screen, setScreen] = useState("welcome");
   const [history, setHistory] = useState([]);
-  const [posts, setPosts] = useState(seedPosts);
+  const [posts, setPosts] = useState([]);
   const [activePostId, setActivePostId] = useState(null);
   const [tipCtx, setTipCtx] = useState(null);
   const [toast, setToast] = useState(null);
+  const [bootstrapping, setBootstrapping] = useState(true);
+
+  /* ── Restore session on mount ── */
+  useEffect(() => {
+    const saved = loadStoredToken();
+    if (!saved) {
+      setBootstrapping(false);
+      return;
+    }
+    api
+      .get("/users/me")
+      .then((u) => {
+        setUser(mapUser(u));
+        setScreen("feed");
+      })
+      .catch(() => {
+        setToken(null);
+      })
+      .finally(() => setBootstrapping(false));
+  }, []);
 
   const goTo = (s) => {
     setHistory((h) => [...h, screen]);
@@ -180,66 +233,74 @@ export default function App() {
     setTimeout(() => setToast(null), 2400);
   };
 
-  const handleAuth = (data) => {
-    setUser({ ...seedMe, ...data });
+  /* ── Auth ── */
+  const handleAuth = (mappedUser) => {
+    setUser(mappedUser);
     setScreen("feed");
     setHistory([]);
   };
 
-  const handleNewPost = (post) => {
-    const newPost = {
-      id: "p" + Date.now(),
-      author: { name: user.name, initials: user.initials, role: "tourist", from: user.from },
-      ...post,
-      posted: "just now",
-      responses: [],
-    };
-    setPosts((p) => [newPost, ...p]);
-    setScreen("feed");
-    setHistory([]);
-    showToast("Posted. Locals will see it shortly.");
+  /* ── Create post ── */
+  const handleNewPost = async (postData) => {
+    try {
+      const created = await api.post("/posts/", {
+        title: postData.title,
+        content: postData.body,         // frontend "body" → backend "content"
+        city: postData.destination,     // frontend "destination" → backend "city"
+        category: postData.category,
+      });
+      setPosts((p) => [mapPost(created), ...p]);
+      setScreen("feed");
+      setHistory([]);
+      showToast("Posted. Locals will see it shortly.");
+    } catch (e) {
+      showToast(e.message);
+    }
   };
 
-  const handleNewResponse = (postId, body) => {
-    setPosts((ps) =>
-      ps.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              responses: [
-                ...p.responses,
-                {
-                  id: "r" + Date.now(),
-                  author: { name: user.name, initials: user.initials, role: "local", from: user.from },
-                  body,
-                  posted: "just now",
-                  rating: 0,
-                  tipped: false,
-                  tipAmount: 0,
-                },
-              ],
-            }
-          : p
-      )
-    );
-    showToast("Reply sent.");
+  /* ── New response ── */
+  const handleNewResponse = async (postId, body) => {
+    try {
+      const created = await api.post(`/responses/${postId}`, { content: body });
+      const mapped = mapResponse(created);
+      setPosts((ps) =>
+        ps.map((p) =>
+          p.id === postId
+            ? { ...p, responses: [...p.responses, mapped] }
+            : p
+        )
+      );
+      showToast("Reply sent.");
+    } catch (e) {
+      showToast(e.message);
+    }
   };
 
-  const handleRate = (postId, responseId, stars) => {
-    setPosts((ps) =>
-      ps.map((p) =>
-        p.id !== postId
-          ? p
-          : {
-              ...p,
-              responses: p.responses.map((r) =>
-                r.id === responseId ? { ...r, rating: stars } : r
-              ),
-            }
-      )
-    );
+  /* ── Rate response ── */
+  const handleRate = async (postId, responseId, stars) => {
+    try {
+      await api.post("/ratings/", {
+        response_id: responseId,        // backend field
+        score: stars,                   // backend uses "score" not "stars"
+      });
+      setPosts((ps) =>
+        ps.map((p) =>
+          p.id !== postId
+            ? p
+            : {
+                ...p,
+                responses: p.responses.map((r) =>
+                  r.id === responseId ? { ...r, rating: stars } : r
+                ),
+              }
+        )
+      );
+    } catch (e) {
+      showToast(e.message);
+    }
   };
 
+  /* ── Tip complete ── */
   const handleTipComplete = (postId, responseId, amount) => {
     setPosts((ps) =>
       ps.map((p) =>
@@ -256,10 +317,28 @@ export default function App() {
       )
     );
     setTipCtx(null);
-    showToast(`Tipped $${amount}. ${responseId ? "They'll feel it." : ""}`);
+    showToast(`Tipped $${amount}. They'll feel it.`);
   };
 
   const activePost = posts.find((p) => p.id === activePostId);
+
+  if (bootstrapping) {
+    return (
+      <>
+        <FontStyles />
+        <div
+          className="min-h-screen w-full flex items-center justify-center"
+          style={{ background: "radial-gradient(ellipse at top, #E8DCC0 0%, #C9B997 60%, #A89472 100%)" }}
+        >
+          <Loader2
+            size={28}
+            strokeWidth={1.5}
+            style={{ color: PALETTE.inkSoft, animation: "spin 900ms linear infinite" }}
+          />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -282,12 +361,10 @@ export default function App() {
             minHeight: "100vh",
           }}
         >
-          {/* Optional desktop notch */}
           <div className="hidden sm:flex absolute top-0 left-1/2 -translate-x-1/2 w-32 h-7 bg-black rounded-b-2xl z-50 items-end justify-center pb-1">
             <div className="w-2 h-2 rounded-full bg-zinc-700" />
           </div>
 
-          {/* Grain overlay */}
           <Grain />
 
           <div className="relative flex-1 overflow-hidden flex flex-col">
@@ -297,6 +374,7 @@ export default function App() {
               <Feed
                 user={user}
                 posts={posts}
+                setPosts={setPosts}
                 onOpen={(id) => {
                   setActivePostId(id);
                   goTo("post");
@@ -313,33 +391,41 @@ export default function App() {
                 onRate={(rid, stars) => handleRate(activePost.id, rid, stars)}
                 onTip={(resp) => setTipCtx({ post: activePost, response: resp })}
                 onReply={(body) => handleNewResponse(activePost.id, body)}
+                onUpdatePost={(updated) =>
+                  setPosts((ps) => ps.map((p) => (p.id === updated.id ? updated : p)))
+                }
               />
             )}
             {screen === "new" && <NewPost onBack={goBack} onSubmit={handleNewPost} />}
             {screen === "profile" && (
-              <Profile user={user} posts={posts} onBack={goBack} onSignOut={() => { setUser(null); setScreen("welcome"); setHistory([]); }} />
+              <Profile
+                user={user}
+                posts={posts}
+                onBack={goBack}
+                onSignOut={() => {
+                  setToken(null);
+                  setUser(null);
+                  setPosts([]);
+                  setScreen("welcome");
+                  setHistory([]);
+                }}
+              />
             )}
           </div>
 
-          {/* Tab bar */}
           {user && ["feed", "post", "profile"].includes(screen) && (
             <TabBar
               screen={screen}
-              onHome={() => {
-                setScreen("feed");
-                setHistory([]);
-              }}
+              onHome={() => { setScreen("feed"); setHistory([]); }}
               onCreate={() => goTo("new")}
-              onProfile={() => {
-                if (screen !== "profile") goTo("profile");
-              }}
+              onProfile={() => { if (screen !== "profile") goTo("profile"); }}
             />
           )}
 
-          {/* Tip overlay */}
           {tipCtx && (
             <TipFlow
               ctx={tipCtx}
+              me={user}
               onClose={() => setTipCtx(null)}
               onComplete={(amt) =>
                 handleTipComplete(tipCtx.post.id, tipCtx.response.id, amt)
@@ -347,7 +433,6 @@ export default function App() {
             />
           )}
 
-          {/* Toast */}
           {toast && (
             <div
               className="absolute bottom-24 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-sm font-medium z-50 flex items-center gap-2"
@@ -356,6 +441,7 @@ export default function App() {
                 color: PALETTE.paper,
                 fontFamily: "'DM Sans', sans-serif",
                 animation: "toastIn 240ms cubic-bezier(.2,.9,.3,1.2)",
+                whiteSpace: "nowrap",
               }}
             >
               <Check size={14} />
@@ -374,7 +460,6 @@ export default function App() {
 function Welcome({ onStart }) {
   return (
     <div className="flex-1 flex flex-col px-7 pt-16 pb-10 relative overflow-hidden">
-      {/* decorative postage corner */}
       <div className="absolute top-6 right-6 flex flex-col items-end gap-1 opacity-80">
         <div
           className="px-2 py-0.5 text-[9px] tracking-[0.2em] uppercase font-medium"
@@ -395,55 +480,22 @@ function Welcome({ onStart }) {
       </div>
 
       <div className="flex items-baseline gap-1 mb-auto" style={{ animation: "fadeUp 600ms ease-out" }}>
-        <span
-          style={{
-            fontFamily: "'Fraunces', serif",
-            fontWeight: 300,
-            fontSize: 42,
-            fontStyle: "italic",
-            letterSpacing: "-0.02em",
-            color: PALETTE.ink,
-            lineHeight: 1,
-          }}
-        >
+        <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 300, fontSize: 42, fontStyle: "italic", letterSpacing: "-0.02em", color: PALETTE.ink, lineHeight: 1 }}>
           mi
         </span>
-        <span
-          style={{
-            fontFamily: "'Fraunces', serif",
-            fontWeight: 500,
-            fontSize: 42,
-            letterSpacing: "-0.02em",
-            color: PALETTE.accent,
-            lineHeight: 1,
-          }}
-        >
+        <span style={{ fontFamily: "'Fraunces', serif", fontWeight: 500, fontSize: 42, letterSpacing: "-0.02em", color: PALETTE.accent, lineHeight: 1 }}>
           concierge
         </span>
       </div>
 
       <div className="mb-auto" style={{ animation: "fadeUp 700ms 100ms ease-out both" }}>
-        <h1
-          style={{
-            fontFamily: "'Fraunces', serif",
-            fontWeight: 300,
-            fontSize: 54,
-            lineHeight: 0.95,
-            letterSpacing: "-0.035em",
-            color: PALETTE.ink,
-          }}
-        >
+        <h1 style={{ fontFamily: "'Fraunces', serif", fontWeight: 300, fontSize: 54, lineHeight: 0.95, letterSpacing: "-0.035em", color: PALETTE.ink }}>
           Local guides,
           <br />
-          <span style={{ fontStyle: "italic", color: PALETTE.accentDeep }}>
-            unforgettable
-          </span>{" "}
+          <span style={{ fontStyle: "italic", color: PALETTE.accentDeep }}>unforgettable</span>{" "}
           experiences.
         </h1>
-        <p
-          className="mt-6 text-[15px] leading-relaxed max-w-[300px]"
-          style={{ color: PALETTE.inkSoft }}
-        >
+        <p className="mt-6 text-[15px] leading-relaxed max-w-[300px]" style={{ color: PALETTE.inkSoft }}>
           Ask a question about a city. Someone who lives there will answer — the way they'd answer a friend.
         </p>
       </div>
@@ -451,30 +503,22 @@ function Welcome({ onStart }) {
       <div className="flex flex-col gap-3" style={{ animation: "fadeUp 800ms 200ms ease-out both" }}>
         <div className="flex items-center gap-3 mb-2 px-1">
           <div className="h-px flex-1" style={{ background: PALETTE.inkFaint }} />
-          <span
-            className="text-[10px] tracking-[0.25em] uppercase"
-            style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
-          >
+          <span className="text-[10px] tracking-[0.25em] uppercase" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
             No bots · Real people
           </span>
           <div className="h-px flex-1" style={{ background: PALETTE.inkFaint }} />
         </div>
-
         <button
           onClick={onStart}
           className="w-full py-4 rounded-full text-[15px] font-medium transition-all active:scale-[0.98]"
-          style={{
-            background: PALETTE.ink,
-            color: PALETTE.paper,
-            fontFamily: "'DM Sans', sans-serif",
-            letterSpacing: "0.01em",
-          }}
+          style={{ background: PALETTE.ink, color: PALETTE.paper, fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.01em" }}
         >
           Begin
         </button>
         <button
           className="text-[13px] py-2"
           style={{ color: PALETTE.inkSoft, fontFamily: "'DM Sans', sans-serif" }}
+          onClick={onStart}
         >
           I've been here before · Sign in
         </button>
@@ -485,98 +529,102 @@ function Welcome({ onStart }) {
 
 /* ============================================================
    AUTH
+   - Register → POST /auth/register (returns UserOut, no token)
+   - Login    → POST /auth/login    (returns Token)
+   - After either: GET /users/me    (returns UserOut with full data)
 ============================================================ */
 function Auth({ onAuth }) {
-  const [mode, setMode] = useState("register"); // register | login
+  const [mode, setMode] = useState("register");
   const [role, setRole] = useState("tourist");
   const [name, setName] = useState("");
-  const [from, setFrom] = useState("");
+  const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const initials = (name || "You").trim().split(/\s+/).slice(0, 2).map((s) => s[0]?.toUpperCase() || "").join("") || "Y";
+  const submit = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      if (mode === "register") {
+        // Step 1: create account
+        await api.post("/auth/register", {
+          name,
+          email,
+          password,
+          role,
+          city: city || null,
+        });
+      }
 
-  const submit = () => {
-    onAuth({
-      name: name || "Traveler",
-      from: from || "Somewhere",
-      role,
-      initials,
-    });
+      // Step 2: get token (both register and login)
+      const tokenData = await api.post("/auth/login", { email, password });
+      setToken(tokenData.access_token);
+
+      // Step 3: fetch full user profile
+      const me = await api.get("/users/me");
+      onAuth(mapUser(me));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="flex-1 flex flex-col px-7 pt-14 pb-8 overflow-y-auto">
       <div className="mb-8">
-        <div
-          style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10,
-            letterSpacing: "0.25em",
-            color: PALETTE.inkSoft,
-            textTransform: "uppercase",
-            marginBottom: 6,
-          }}
-        >
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.25em", color: PALETTE.inkSoft, textTransform: "uppercase", marginBottom: 6 }}>
           {mode === "register" ? "First time?" : "Welcome back"}
         </div>
-        <h2
-          style={{
-            fontFamily: "'Fraunces', serif",
-            fontWeight: 400,
-            fontSize: 36,
-            lineHeight: 1,
-            letterSpacing: "-0.025em",
-            color: PALETTE.ink,
-          }}
-        >
-          Tell us {" "}
+        <h2 style={{ fontFamily: "'Fraunces', serif", fontWeight: 400, fontSize: 36, lineHeight: 1, letterSpacing: "-0.025em", color: PALETTE.ink }}>
+          Tell us{" "}
           <span style={{ fontStyle: "italic", color: PALETTE.accent }}>who you are</span>.
         </h2>
       </div>
+
+      {error && (
+        <div
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-4 text-[13px]"
+          style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep }}
+        >
+          <AlertCircle size={14} strokeWidth={2} />
+          {error}
+        </div>
+      )}
 
       {mode === "register" && (
         <>
           <Label>I'm here as a</Label>
           <div className="flex gap-2 mb-6">
-            <RoleCard
-              active={role === "tourist"}
-              onClick={() => setRole("tourist")}
-              title="Traveler"
-              sub="I have questions"
-              Icon={Compass}
-            />
-            <RoleCard
-              active={role === "local"}
-              onClick={() => setRole("local")}
-              title="Local"
-              sub="I have answers"
-              Icon={MapPin}
-            />
+            <RoleCard active={role === "tourist"} onClick={() => setRole("tourist")} title="Traveler" sub="I have questions" Icon={Compass} />
+            <RoleCard active={role === "local"} onClick={() => setRole("local")} title="Local" sub="I have answers" Icon={MapPin} />
           </div>
-
           <Label>Name</Label>
           <Input value={name} onChange={setName} placeholder="What should we call you?" />
           <Label>{role === "local" ? "Where you live" : "Where you're from"}</Label>
-          <Input value={from} onChange={setFrom} placeholder={role === "local" ? "e.g. Lisbon" : "e.g. Berlin"} />
+          <Input value={city} onChange={setCity} placeholder={role === "local" ? "e.g. Lisbon" : "e.g. Berlin"} />
         </>
       )}
 
       <Label>Email</Label>
       <Input value={email} onChange={setEmail} placeholder="hello@somewhere.com" />
-
       <Label>Password</Label>
-      <Input type="password" placeholder="••••••••" />
+      <Input type="password" value={password} onChange={setPassword} placeholder="••••••••" />
 
       <div className="mt-auto pt-6 flex flex-col gap-3">
         <button
           onClick={submit}
-          className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition-all"
+          disabled={loading}
+          className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           style={{ background: PALETTE.ink, color: PALETTE.paper }}
         >
+          {loading && <Loader2 size={15} strokeWidth={2} style={{ animation: "spin 900ms linear infinite" }} />}
           {mode === "register" ? "Create account" : "Sign in"}
         </button>
         <button
-          onClick={() => setMode(mode === "register" ? "login" : "register")}
+          onClick={() => { setMode(mode === "register" ? "login" : "register"); setError(null); }}
           className="text-[13px] py-1"
           style={{ color: PALETTE.inkSoft }}
         >
@@ -599,36 +647,15 @@ function RoleCard({ active, onClick, title, sub, Icon }) {
       }}
     >
       <Icon size={18} strokeWidth={1.5} className="mb-2" />
-      <div
-        style={{
-          fontFamily: "'Fraunces', serif",
-          fontSize: 19,
-          fontWeight: 500,
-          lineHeight: 1.1,
-        }}
-      >
-        {title}
-      </div>
-      <div className="text-[11px] mt-0.5" style={{ opacity: 0.7 }}>
-        {sub}
-      </div>
+      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 19, fontWeight: 500, lineHeight: 1.1 }}>{title}</div>
+      <div className="text-[11px] mt-0.5" style={{ opacity: 0.7 }}>{sub}</div>
     </button>
   );
 }
 
 function Label({ children }) {
   return (
-    <div
-      style={{
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 9.5,
-        letterSpacing: "0.22em",
-        color: PALETTE.inkSoft,
-        textTransform: "uppercase",
-        marginBottom: 7,
-        marginTop: 4,
-      }}
-    >
+    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.22em", color: PALETTE.inkSoft, textTransform: "uppercase", marginBottom: 7, marginTop: 4 }}>
       {children}
     </div>
   );
@@ -642,11 +669,7 @@ function Input({ value, onChange, placeholder, type = "text" }) {
       onChange={(e) => onChange?.(e.target.value)}
       placeholder={placeholder}
       className="w-full bg-transparent py-2.5 mb-5 text-[15px] outline-none transition-colors"
-      style={{
-        borderBottom: `1px solid ${PALETTE.border}`,
-        color: PALETTE.ink,
-        fontFamily: "'DM Sans', sans-serif",
-      }}
+      style={{ borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.ink, fontFamily: "'DM Sans', sans-serif" }}
       onFocus={(e) => (e.target.style.borderColor = PALETTE.ink)}
       onBlur={(e) => (e.target.style.borderColor = PALETTE.border)}
     />
@@ -655,45 +678,52 @@ function Input({ value, onChange, placeholder, type = "text" }) {
 
 /* ============================================================
    FEED
+   GET /posts/?city=&category=
+   Posts are fetched on mount and when filters change.
 ============================================================ */
-function Feed({ user, posts, onOpen, onCreate, onProfile }) {
+function Feed({ user, posts, setPosts, onOpen, onCreate, onProfile }) {
   const [activeCat, setActiveCat] = useState("all");
   const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const filtered = posts.filter((p) => {
-    if (activeCat !== "all" && p.category !== activeCat) return false;
-    if (query && !(`${p.title} ${p.destination} ${p.body}`.toLowerCase().includes(query.toLowerCase()))) return false;
-    return true;
-  });
+  const fetchPosts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (activeCat !== "all") params.set("category", activeCat);
+      if (query.trim()) params.set("city", query.trim());
+      const data = await api.get(`/posts/?${params.toString()}`);
+      setPosts((data || []).map(mapPost));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCat]);
+
+  // Debounce search query
+  useEffect(() => {
+    const t = setTimeout(fetchPosts, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
       <div className="px-6 pt-14 pb-4">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <div
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9.5,
-                letterSpacing: "0.25em",
-                color: PALETTE.inkSoft,
-                textTransform: "uppercase",
-              }}
-            >
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.25em", color: PALETTE.inkSoft, textTransform: "uppercase" }}>
               The Wire · Live
             </div>
-            <h1
-              style={{
-                fontFamily: "'Fraunces', serif",
-                fontWeight: 400,
-                fontSize: 30,
-                lineHeight: 1,
-                letterSpacing: "-0.02em",
-                color: PALETTE.ink,
-                marginTop: 4,
-              }}
-            >
+            <h1 style={{ fontFamily: "'Fraunces', serif", fontWeight: 400, fontSize: 30, lineHeight: 1, letterSpacing: "-0.02em", color: PALETTE.ink, marginTop: 4 }}>
               Good morning,{" "}
               <span style={{ fontStyle: "italic", color: PALETTE.accent }}>
                 {user?.name?.split(" ")[0] || "friend"}.
@@ -703,17 +733,12 @@ function Feed({ user, posts, onOpen, onCreate, onProfile }) {
           <button
             onClick={onProfile}
             className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium transition-transform active:scale-95"
-            style={{
-              background: PALETTE.ink,
-              color: PALETTE.paper,
-              fontFamily: "'Fraunces', serif",
-            }}
+            style={{ background: PALETTE.ink, color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}
           >
             {user?.initials || "U"}
           </button>
         </div>
 
-        {/* Search */}
         <div
           className="flex items-center gap-2 px-4 py-2.5 rounded-full mb-4"
           style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
@@ -728,42 +753,57 @@ function Feed({ user, posts, onOpen, onCreate, onProfile }) {
           />
         </div>
 
-        {/* Category strip */}
         <div className="flex gap-2 overflow-x-auto -mx-6 px-6 pb-1 no-scrollbar">
           <CatChip label="All" active={activeCat === "all"} onClick={() => setActiveCat("all")} />
           {CATEGORIES.map((c) => (
-            <CatChip
-              key={c.id}
-              label={c.label}
-              Icon={c.Icon}
-              active={activeCat === c.id}
-              onClick={() => setActiveCat(c.id)}
-            />
+            <CatChip key={c.id} label={c.label} Icon={c.Icon} active={activeCat === c.id} onClick={() => setActiveCat(c.id)} />
           ))}
         </div>
       </div>
 
-      {/* Feed list */}
       <div className="flex-1 overflow-y-auto px-6 pb-32">
-        {filtered.length === 0 && (
-          <div
-            className="text-center py-16 text-[14px]"
-            style={{ color: PALETTE.inkSoft, fontStyle: "italic", fontFamily: "'Fraunces', serif" }}
-          >
+        {error && (
+          <div className="flex items-center justify-between px-4 py-3 rounded-2xl mb-4 text-[13px]"
+            style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep }}>
+            <span className="flex items-center gap-2"><AlertCircle size={14} />{error}</span>
+            <button onClick={fetchPosts} className="underline text-[12px]">Retry</button>
+          </div>
+        )}
+
+        {loading && (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        )}
+
+        {!loading && !error && posts.length === 0 && (
+          <div className="text-center py-16 text-[14px]" style={{ color: PALETTE.inkSoft, fontStyle: "italic", fontFamily: "'Fraunces', serif" }}>
             Nothing here yet. Be the first to ask.
           </div>
         )}
-        {filtered.map((p, i) => (
+
+        {!loading && posts.map((p, i) => (
           <PostCard key={p.id} post={p} onClick={() => onOpen(p.id)} delay={i * 60} />
         ))}
-        <div
-          className="text-center mt-8 mb-4 text-[10px] tracking-[0.25em] uppercase"
-          style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}
-        >
-          — end of dispatch —
-        </div>
+
+        {!loading && posts.length > 0 && (
+          <div className="text-center mt-8 mb-4 text-[10px] tracking-[0.25em] uppercase" style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}>
+            — end of dispatch —
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div
+      className="w-full mb-4 p-5 rounded-3xl"
+      style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, height: 168, opacity: 0.6, animation: "pulse 1.5s ease-in-out infinite" }}
+    />
   );
 }
 
@@ -792,41 +832,24 @@ function PostCard({ post, onClick, delay = 0 }) {
     <button
       onClick={onClick}
       className="w-full text-left mb-4 p-5 rounded-3xl transition-all active:scale-[0.99] hover:shadow-sm"
-      style={{
-        background: PALETTE.paper,
-        border: `1px solid ${PALETTE.border}`,
-        animation: `fadeUp 500ms ${delay}ms ease-out both`,
-      }}
+      style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, animation: `fadeUp 500ms ${delay}ms ease-out both` }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-[10.5px]"
-            style={{
-              background: PALETTE.accentSoft,
-              color: PALETTE.accentDeep,
-              fontFamily: "'Fraunces', serif",
-              fontWeight: 600,
-            }}
+            style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'Fraunces', serif", fontWeight: 600 }}
           >
-            {post.author.initials}
+            {post.author?.initials}
           </div>
           <div>
-            <div className="text-[12.5px] font-medium leading-tight" style={{ color: PALETTE.ink }}>
-              {post.author.name}
-            </div>
-            <div className="text-[10.5px]" style={{ color: PALETTE.inkSoft }}>
-              from {post.author.from} · {post.posted}
-            </div>
+            <div className="text-[12.5px] font-medium leading-tight" style={{ color: PALETTE.ink }}>{post.author?.name}</div>
+            <div className="text-[10.5px]" style={{ color: PALETTE.inkSoft }}>from {post.author?.from} · {post.posted}</div>
           </div>
         </div>
         <div
           className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full"
-          style={{
-            background: PALETTE.paperAlt,
-            color: PALETTE.inkSoft,
-            fontFamily: "'JetBrains Mono', monospace",
-          }}
+          style={{ background: PALETTE.paperAlt, color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
         >
           <Icon size={11} strokeWidth={1.7} />
           <span className="uppercase tracking-wider">{post.category}</span>
@@ -835,30 +858,15 @@ function PostCard({ post, onClick, delay = 0 }) {
 
       <div className="flex items-center gap-1 mb-1.5">
         <MapPin size={11} strokeWidth={1.8} style={{ color: PALETTE.accent }} />
-        <span
-          className="text-[10.5px] uppercase tracking-[0.2em]"
-          style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}
-        >
+        <span className="text-[10.5px] uppercase tracking-[0.2em]" style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}>
           {post.destination}
         </span>
       </div>
 
-      <h3
-        style={{
-          fontFamily: "'Fraunces', serif",
-          fontSize: 20,
-          fontWeight: 400,
-          lineHeight: 1.15,
-          letterSpacing: "-0.018em",
-          color: PALETTE.ink,
-          marginBottom: 8,
-        }}
-      >
+      <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 400, lineHeight: 1.15, letterSpacing: "-0.018em", color: PALETTE.ink, marginBottom: 8 }}>
         {post.title}
       </h3>
-      <p className="text-[13px] leading-relaxed line-clamp-2" style={{ color: PALETTE.inkSoft }}>
-        {post.body}
-      </p>
+      <p className="text-[13px] leading-relaxed line-clamp-2" style={{ color: PALETTE.inkSoft }}>{post.body}</p>
 
       <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
         <div className="flex items-center gap-1.5 text-[12px]" style={{ color: hasAnswer ? PALETTE.green : PALETTE.inkSoft }}>
@@ -875,78 +883,80 @@ function PostCard({ post, onClick, delay = 0 }) {
 
 /* ============================================================
    POST DETAIL
+   Fetches responses fresh from GET /responses/{post_id}
+   so ratings and tip state from the server are always current.
 ============================================================ */
-function PostDetail({ post, me, onBack, onRate, onTip, onReply }) {
+function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) {
   const Icon = catIcon(post.category);
   const [reply, setReply] = useState("");
-  const isMyPost = me?.name === post.author.name;
+  const [loadingResponses, setLoadingResponses] = useState(true);
+  const [localPost, setLocalPost] = useState(post);
+
+  const isMyPost = me?.id === post.author_id;
+
+  // Fetch responses fresh every time this post is opened
+  useEffect(() => {
+    setLoadingResponses(true);
+    api
+      .get(`/responses/${post.id}`)
+      .then((data) => {
+        const mapped = (data || []).map(mapResponse);
+        const updated = { ...post, responses: mapped };
+        setLocalPost(updated);
+        onUpdatePost(updated);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingResponses(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+
+  // Keep localPost in sync if parent updates it (e.g. after a new reply)
+  useEffect(() => {
+    setLocalPost(post);
+  }, [post]);
+
+  const handleReply = async () => {
+    if (!reply.trim()) return;
+    await onReply(reply.trim());
+    setReply("");
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TopBar onBack={onBack} title="Dispatch" />
 
       <div className="flex-1 overflow-y-auto px-6 pb-40">
-        {/* Header block */}
-        <div
-          className="p-5 rounded-3xl mb-5"
-          style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
-        >
+        {/* Post header */}
+        <div className="p-5 rounded-3xl mb-5" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1.5">
               <MapPin size={13} strokeWidth={1.8} style={{ color: PALETTE.accent }} />
-              <span
-                className="text-[10.5px] uppercase tracking-[0.22em]"
-                style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}
-              >
-                {post.destination}
+              <span className="text-[10.5px] uppercase tracking-[0.22em]" style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}>
+                {localPost.destination}
               </span>
             </div>
-            <div
-              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full uppercase tracking-wider"
-              style={{
-                background: PALETTE.paperAlt,
-                color: PALETTE.inkSoft,
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-            >
+            <div className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full uppercase tracking-wider" style={{ background: PALETTE.paperAlt, color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
               <Icon size={11} strokeWidth={1.7} />
-              {post.category}
+              {localPost.category}
             </div>
           </div>
 
-          <h2
-            style={{
-              fontFamily: "'Fraunces', serif",
-              fontSize: 28,
-              fontWeight: 400,
-              lineHeight: 1.1,
-              letterSpacing: "-0.025em",
-              color: PALETTE.ink,
-              marginBottom: 12,
-            }}
-          >
-            {post.title}
+          <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: 28, fontWeight: 400, lineHeight: 1.1, letterSpacing: "-0.025em", color: PALETTE.ink, marginBottom: 12 }}>
+            {localPost.title}
           </h2>
-          <p className="text-[14.5px] leading-relaxed" style={{ color: PALETTE.ink }}>
-            {post.body}
-          </p>
+          <p className="text-[14.5px] leading-relaxed" style={{ color: PALETTE.ink }}>{localPost.body}</p>
 
           <div className="flex items-center gap-2 mt-4 pt-4" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
             <div
               className="w-7 h-7 rounded-full flex items-center justify-center text-[10px]"
-              style={{
-                background: PALETTE.accentSoft,
-                color: PALETTE.accentDeep,
-                fontFamily: "'Fraunces', serif",
-                fontWeight: 600,
-              }}
+              style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'Fraunces', serif", fontWeight: 600 }}
             >
-              {post.author.initials}
+              {localPost.author?.initials}
             </div>
             <div className="text-[12px]" style={{ color: PALETTE.inkSoft }}>
-              <span style={{ color: PALETTE.ink, fontWeight: 500 }}>{post.author.name}</span>
-              {" · "}from {post.author.from}
-              {" · "}{post.posted}
+              <span style={{ color: PALETTE.ink, fontWeight: 500 }}>{localPost.author?.name}</span>
+              {" · "}from {localPost.author?.from}
+              {" · "}{localPost.posted}
             </div>
           </div>
         </div>
@@ -954,40 +964,22 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply }) {
         {/* Responses header */}
         <div className="flex items-center justify-between mb-3 px-1">
           <div>
-            <div
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9.5,
-                letterSpacing: "0.25em",
-                color: PALETTE.inkSoft,
-                textTransform: "uppercase",
-              }}
-            >
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.25em", color: PALETTE.inkSoft, textTransform: "uppercase" }}>
               From locals
             </div>
-            <div
-              style={{
-                fontFamily: "'Fraunces', serif",
-                fontSize: 22,
-                fontWeight: 400,
-                color: PALETTE.ink,
-                lineHeight: 1.1,
-              }}
-            >
-              <span style={{ fontStyle: "italic" }}>{post.responses.length}</span> {post.responses.length === 1 ? "answer" : "answers"}
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 400, color: PALETTE.ink, lineHeight: 1.1 }}>
+              <span style={{ fontStyle: "italic" }}>{localPost.responses.length}</span>{" "}
+              {localPost.responses.length === 1 ? "answer" : "answers"}
             </div>
           </div>
+          {loadingResponses && (
+            <Loader2 size={16} strokeWidth={1.5} style={{ color: PALETTE.inkSoft, animation: "spin 900ms linear infinite" }} />
+          )}
         </div>
 
-        {post.responses.length === 0 && (
-          <div
-            className="rounded-3xl p-6 text-center"
-            style={{ background: PALETTE.paper, border: `1px dashed ${PALETTE.border}` }}
-          >
-            <div
-              className="text-[14px] mb-1"
-              style={{ fontFamily: "'Fraunces', serif", fontStyle: "italic", color: PALETTE.ink }}
-            >
+        {!loadingResponses && localPost.responses.length === 0 && (
+          <div className="rounded-3xl p-6 text-center" style={{ background: PALETTE.paper, border: `1px dashed ${PALETTE.border}` }}>
+            <div className="text-[14px] mb-1" style={{ fontFamily: "'Fraunces', serif", fontStyle: "italic", color: PALETTE.ink }}>
               No one's answered yet.
             </div>
             <div className="text-[12px]" style={{ color: PALETTE.inkSoft }}>
@@ -996,7 +988,7 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply }) {
           </div>
         )}
 
-        {post.responses.map((r, i) => (
+        {localPost.responses.map((r, i) => (
           <ResponseCard
             key={r.id}
             response={r}
@@ -1008,13 +1000,11 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply }) {
         ))}
       </div>
 
-      {/* Reply composer for locals */}
+      {/* Reply composer — only for locals, not on own post */}
       {me?.role === "local" && !isMyPost && (
         <div
           className="absolute bottom-20 left-0 right-0 px-4 py-3"
-          style={{
-            background: `linear-gradient(to top, ${PALETTE.bg} 60%, transparent)`,
-          }}
+          style={{ background: `linear-gradient(to top, ${PALETTE.bg} 60%, transparent)` }}
         >
           <div
             className="flex items-end gap-2 px-3 py-2 rounded-3xl"
@@ -1029,12 +1019,7 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply }) {
               style={{ color: PALETTE.ink, maxHeight: 90 }}
             />
             <button
-              onClick={() => {
-                if (reply.trim()) {
-                  onReply(reply.trim());
-                  setReply("");
-                }
-              }}
+              onClick={handleReply}
               className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition"
               style={{ background: PALETTE.accent, color: "#fff" }}
             >
@@ -1051,78 +1036,36 @@ function ResponseCard({ response, isMyPost, onRate, onTip, delay }) {
   return (
     <div
       className="p-5 rounded-3xl mb-4 relative"
-      style={{
-        background: PALETTE.paper,
-        border: `1px solid ${PALETTE.border}`,
-        animation: `fadeUp 500ms ${delay}ms ease-out both`,
-      }}
+      style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, animation: `fadeUp 500ms ${delay}ms ease-out both` }}
     >
-      {/* Quote mark */}
-      <div
-        className="absolute top-3 right-5 select-none"
-        style={{
-          fontFamily: "'Fraunces', serif",
-          fontSize: 56,
-          fontStyle: "italic",
-          color: PALETTE.accentSoft,
-          lineHeight: 1,
-          fontWeight: 300,
-        }}
-      >
+      <div className="absolute top-3 right-5 select-none" style={{ fontFamily: "'Fraunces', serif", fontSize: 56, fontStyle: "italic", color: PALETTE.accentSoft, lineHeight: 1, fontWeight: 300 }}>
         "
       </div>
 
       <div className="flex items-center gap-2 mb-3">
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center text-[11px]"
-          style={{
-            background: PALETTE.greenSoft,
-            color: PALETTE.green,
-            fontFamily: "'Fraunces', serif",
-            fontWeight: 600,
-          }}
-        >
-          {response.author.initials}
+        <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px]" style={{ background: PALETTE.greenSoft, color: PALETTE.green, fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+          {response.author?.initials}
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[13px] font-medium" style={{ color: PALETTE.ink }}>
-              {response.author.name}
-            </span>
-            <span
-              className="text-[8.5px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-medium"
-              style={{
-                background: PALETTE.green,
-                color: PALETTE.paper,
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-            >
+            <span className="text-[13px] font-medium" style={{ color: PALETTE.ink }}>{response.author?.name}</span>
+            <span className="text-[8.5px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-medium" style={{ background: PALETTE.green, color: PALETTE.paper, fontFamily: "'JetBrains Mono', monospace" }}>
               Local
             </span>
           </div>
           <div className="text-[11px]" style={{ color: PALETTE.inkSoft }}>
-            in {response.author.from} · {response.posted}
+            in {response.author?.from} · {response.posted}
           </div>
         </div>
       </div>
 
-      <p className="text-[14px] leading-relaxed mb-4" style={{ color: PALETTE.ink }}>
-        {response.body}
-      </p>
+      <p className="text-[14px] leading-relaxed mb-4" style={{ color: PALETTE.ink }}>{response.body}</p>
 
       <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
         <StarRating value={response.rating} onChange={isMyPost ? onRate : undefined} />
         <div className="flex items-center gap-2">
           {response.tipped && (
-            <span
-              className="text-[10px] px-2 py-1 rounded-full flex items-center gap-1"
-              style={{
-                background: PALETTE.accentSoft,
-                color: PALETTE.accentDeep,
-                fontFamily: "'JetBrains Mono', monospace",
-                fontWeight: 500,
-              }}
-            >
+            <span className="text-[10px] px-2 py-1 rounded-full flex items-center gap-1" style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
               <Heart size={9} strokeWidth={2} fill={PALETTE.accentDeep} />
               ${response.tipAmount} tipped
             </span>
@@ -1131,10 +1074,7 @@ function ResponseCard({ response, isMyPost, onRate, onTip, delay }) {
             <button
               onClick={onTip}
               className="text-[11.5px] px-3 py-1.5 rounded-full flex items-center gap-1 font-medium active:scale-95 transition"
-              style={{
-                background: PALETTE.ink,
-                color: PALETTE.paper,
-              }}
+              style={{ background: PALETTE.ink, color: PALETTE.paper }}
             >
               <Coffee size={11} strokeWidth={2} />
               {response.tipped ? "Tip again" : "Send a tip"}
@@ -1163,20 +1103,12 @@ function StarRating({ value, onChange }) {
             className={`p-0.5 transition-transform ${interactive ? "active:scale-90" : ""}`}
             style={{ cursor: interactive ? "pointer" : "default" }}
           >
-            <Star
-              size={14}
-              strokeWidth={1.5}
-              fill={filled ? PALETTE.gold : "transparent"}
-              style={{ color: filled ? PALETTE.gold : PALETTE.inkFaint }}
-            />
+            <Star size={14} strokeWidth={1.5} fill={filled ? PALETTE.gold : "transparent"} style={{ color: filled ? PALETTE.gold : PALETTE.inkFaint }} />
           </button>
         );
       })}
       {value > 0 && (
-        <span
-          className="text-[10.5px] ml-1"
-          style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
-        >
+        <span className="text-[10.5px] ml-1" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
           {value}.0
         </span>
       )}
@@ -1186,42 +1118,38 @@ function StarRating({ value, onChange }) {
 
 /* ============================================================
    NEW POST
+   POST /posts/ with { title, content, city, category }
+   "body" in UI → "content" in API
+   "destination" in UI → "city" in API
 ============================================================ */
 function NewPost({ onBack, onSubmit }) {
   const [destination, setDestination] = useState("");
   const [category, setCategory] = useState("food");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const valid = destination && title && body;
+  const valid = destination.trim() && title.trim() && body.trim();
+
+  const handleSubmit = async () => {
+    if (!valid || loading) return;
+    setLoading(true);
+    try {
+      await onSubmit({ destination, category, title, body });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TopBar onBack={onBack} title="Ask a local" />
       <div className="flex-1 overflow-y-auto px-6 pb-8">
         <div className="mb-5">
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9.5,
-              letterSpacing: "0.25em",
-              color: PALETTE.inkSoft,
-              textTransform: "uppercase",
-              marginBottom: 6,
-            }}
-          >
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.25em", color: PALETTE.inkSoft, textTransform: "uppercase", marginBottom: 6 }}>
             New dispatch
           </div>
-          <h2
-            style={{
-              fontFamily: "'Fraunces', serif",
-              fontWeight: 400,
-              fontSize: 28,
-              lineHeight: 1.05,
-              letterSpacing: "-0.025em",
-              color: PALETTE.ink,
-            }}
-          >
+          <h2 style={{ fontFamily: "'Fraunces', serif", fontWeight: 400, fontSize: 28, lineHeight: 1.05, letterSpacing: "-0.025em", color: PALETTE.ink }}>
             What do you{" "}
             <span style={{ fontStyle: "italic", color: PALETTE.accent }}>need to know?</span>
           </h2>
@@ -1263,34 +1191,23 @@ function NewPost({ onBack, onSubmit }) {
           rows={5}
           placeholder="Tell us what you've already tried, what kind of answer you're looking for, how much time you have…"
           className="w-full bg-transparent py-2.5 mb-2 text-[14px] outline-none resize-none"
-          style={{
-            borderBottom: `1px solid ${PALETTE.border}`,
-            color: PALETTE.ink,
-            fontFamily: "'DM Sans', sans-serif",
-          }}
+          style={{ borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.ink, fontFamily: "'DM Sans', sans-serif" }}
         />
 
-        <div
-          className="mt-6 p-4 rounded-2xl flex items-start gap-3 text-[12px]"
-          style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, color: PALETTE.inkSoft }}
-        >
+        <div className="mt-6 p-4 rounded-2xl flex items-start gap-3 text-[12px]" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, color: PALETTE.inkSoft }}>
           <Shield size={14} strokeWidth={1.7} style={{ color: PALETTE.green, marginTop: 1 }} />
-          <span>
-            Real locals — verified by phone — will see this. No bots, no scraped reviews, no sponsored answers.
-          </span>
+          <span>Real locals — verified by phone — will see this. No bots, no scraped reviews, no sponsored answers.</span>
         </div>
       </div>
 
       <div className="px-6 pb-6 pt-2">
         <button
-          onClick={() => valid && onSubmit({ destination, category, title, body })}
-          disabled={!valid}
-          className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition-all"
-          style={{
-            background: valid ? PALETTE.ink : PALETTE.border,
-            color: valid ? PALETTE.paper : PALETTE.inkSoft,
-          }}
+          onClick={handleSubmit}
+          disabled={!valid || loading}
+          className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          style={{ background: valid ? PALETTE.ink : PALETTE.border, color: valid ? PALETTE.paper : PALETTE.inkSoft }}
         >
+          {loading && <Loader2 size={15} strokeWidth={2} style={{ animation: "spin 900ms linear infinite" }} />}
           Send to locals
         </button>
       </div>
@@ -1300,59 +1217,44 @@ function NewPost({ onBack, onSubmit }) {
 
 /* ============================================================
    PROFILE
+   GET /users/me — re-fetched on mount to stay fresh
 ============================================================ */
 function Profile({ user, posts, onBack, onSignOut }) {
   if (!user) return null;
-  const myPosts = posts.filter((p) => p.author.name === user.name);
-  const myAnswers = posts.flatMap((p) => p.responses.filter((r) => r.author.name === user.name).map((r) => ({ ...r, post: p })));
+
+  const myPosts = posts.filter((p) => p.author_id === user.id);
+  const myAnswers = posts.flatMap((p) =>
+    p.responses
+      .filter((r) => r.author_id === user.id)
+      .map((r) => ({ ...r, post: p }))
+  );
   const tipsEarned = myAnswers.reduce((s, a) => s + (a.tipAmount || 0), 0);
-  const avgRating = myAnswers.filter((a) => a.rating > 0).reduce((s, a, _, arr) => s + a.rating / arr.length, 0);
+  const ratedAnswers = myAnswers.filter((a) => a.rating > 0);
+  const avgRating = ratedAnswers.length
+    ? (ratedAnswers.reduce((s, a) => s + a.rating, 0) / ratedAnswers.length).toFixed(1)
+    : "—";
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TopBar onBack={onBack} title="Passport" />
       <div className="flex-1 overflow-y-auto px-6 pb-32">
-        {/* Hero */}
         <div className="relative mb-6 mt-2">
           <div
             className="absolute -top-2 -right-2 px-2 py-1 rounded-sm rotate-6"
-            style={{
-              background: PALETTE.accent,
-              color: PALETTE.paper,
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9,
-              letterSpacing: "0.2em",
-            }}
+            style={{ background: PALETTE.accent, color: PALETTE.paper, fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.2em" }}
           >
             {user.role.toUpperCase()}
           </div>
-          <div
-            className="rounded-3xl p-6"
-            style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
-          >
+          <div className="rounded-3xl p-6" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
             <div className="flex items-center gap-4 mb-5">
               <div
                 className="w-16 h-16 rounded-full flex items-center justify-center text-[22px]"
-                style={{
-                  background: PALETTE.ink,
-                  color: PALETTE.paper,
-                  fontFamily: "'Fraunces', serif",
-                  fontWeight: 500,
-                }}
+                style={{ background: PALETTE.ink, color: PALETTE.paper, fontFamily: "'Fraunces', serif", fontWeight: 500 }}
               >
                 {user.initials}
               </div>
               <div className="flex-1">
-                <div
-                  style={{
-                    fontFamily: "'Fraunces', serif",
-                    fontSize: 24,
-                    fontWeight: 400,
-                    lineHeight: 1.05,
-                    letterSpacing: "-0.02em",
-                    color: PALETTE.ink,
-                  }}
-                >
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 400, lineHeight: 1.05, letterSpacing: "-0.02em", color: PALETTE.ink }}>
                   {user.name}
                 </div>
                 <div className="text-[12px] mt-0.5" style={{ color: PALETTE.inkSoft }}>
@@ -1361,61 +1263,37 @@ function Profile({ user, posts, onBack, onSignOut }) {
                 </div>
               </div>
             </div>
-
             <div className="grid grid-cols-3 gap-3 pt-4" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
               <Stat label={user.role === "local" ? "Answers" : "Questions"} value={user.role === "local" ? myAnswers.length : myPosts.length} />
-              <Stat label="Avg. rating" value={avgRating ? avgRating.toFixed(1) : "—"} />
+              <Stat label="Avg. rating" value={avgRating} />
               <Stat label={user.role === "local" ? "Earned" : "Tipped"} value={`$${tipsEarned}`} />
             </div>
           </div>
         </div>
 
-        {/* Recent */}
         <SectionHeader title={user.role === "local" ? "Your answers" : "Your questions"} />
+
         {user.role === "local" ? (
           myAnswers.length === 0 ? (
             <EmptyNote text="No answers yet. Open the feed and help someone out." />
           ) : (
             myAnswers.map((a) => (
-              <div
-                key={a.id}
-                className="p-4 rounded-2xl mb-3"
-                style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
-              >
-                <div
-                  className="text-[10.5px] uppercase tracking-[0.2em] mb-1"
-                  style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}
-                >
+              <div key={a.id} className="p-4 rounded-2xl mb-3" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+                <div className="text-[10.5px] uppercase tracking-[0.2em] mb-1" style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}>
                   <MapPin size={10} className="inline mr-1 -mt-0.5" strokeWidth={1.8} />
                   {a.post.destination}
                 </div>
-                <div
-                  style={{
-                    fontFamily: "'Fraunces', serif",
-                    fontSize: 16,
-                    color: PALETTE.ink,
-                    fontWeight: 400,
-                    letterSpacing: "-0.015em",
-                    lineHeight: 1.2,
-                  }}
-                >
+                <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, color: PALETTE.ink, fontWeight: 400, letterSpacing: "-0.015em", lineHeight: 1.2 }}>
                   {a.post.title}
                 </div>
-                <p
-                  className="text-[12.5px] mt-1 line-clamp-2"
-                  style={{ color: PALETTE.inkSoft, fontStyle: "italic" }}
-                >
+                <p className="text-[12.5px] mt-1 line-clamp-2" style={{ color: PALETTE.inkSoft, fontStyle: "italic" }}>
                   "{a.body}"
                 </p>
                 <div className="flex items-center justify-between mt-2.5">
                   <StarRating value={a.rating} />
                   {a.tipped && (
-                    <span
-                      className="text-[10px] flex items-center gap-1"
-                      style={{ color: PALETTE.accentDeep, fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}
-                    >
-                      <Heart size={9} fill={PALETTE.accentDeep} strokeWidth={2} />
-                      ${a.tipAmount}
+                    <span className="text-[10px] flex items-center gap-1" style={{ color: PALETTE.accentDeep, fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
+                      <Heart size={9} fill={PALETTE.accentDeep} strokeWidth={2} />${a.tipAmount}
                     </span>
                   )}
                 </div>
@@ -1426,25 +1304,11 @@ function Profile({ user, posts, onBack, onSignOut }) {
           <EmptyNote text="No questions yet. Ask one — a local is waiting." />
         ) : (
           myPosts.map((p) => (
-            <div
-              key={p.id}
-              className="p-4 rounded-2xl mb-3"
-              style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
-            >
-              <div
-                className="text-[10.5px] uppercase tracking-[0.2em] mb-1"
-                style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}
-              >
+            <div key={p.id} className="p-4 rounded-2xl mb-3" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+              <div className="text-[10.5px] uppercase tracking-[0.2em] mb-1" style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}>
                 {p.destination}
               </div>
-              <div
-                style={{
-                  fontFamily: "'Fraunces', serif",
-                  fontSize: 16,
-                  color: PALETTE.ink,
-                  letterSpacing: "-0.015em",
-                }}
-              >
+              <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16, color: PALETTE.ink, letterSpacing: "-0.015em" }}>
                 {p.title}
               </div>
               <div className="text-[11.5px] mt-1.5" style={{ color: PALETTE.inkSoft }}>
@@ -1466,11 +1330,7 @@ function Profile({ user, posts, onBack, onSignOut }) {
         >
           Sign out
         </button>
-
-        <div
-          className="text-center mt-8 text-[10px] tracking-[0.25em] uppercase"
-          style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}
-        >
+        <div className="text-center mt-8 text-[10px] tracking-[0.25em] uppercase" style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}>
           mi concierge · made for wanderers
         </div>
       </div>
@@ -1481,22 +1341,10 @@ function Profile({ user, posts, onBack, onSignOut }) {
 function Stat({ label, value }) {
   return (
     <div>
-      <div
-        style={{
-          fontFamily: "'Fraunces', serif",
-          fontSize: 24,
-          fontWeight: 400,
-          letterSpacing: "-0.02em",
-          color: PALETTE.ink,
-          lineHeight: 1,
-        }}
-      >
+      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 400, letterSpacing: "-0.02em", color: PALETTE.ink, lineHeight: 1 }}>
         {value}
       </div>
-      <div
-        className="text-[9.5px] uppercase tracking-[0.18em] mt-1"
-        style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
-      >
+      <div className="text-[9.5px] uppercase tracking-[0.18em] mt-1" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
         {label}
       </div>
     </div>
@@ -1506,10 +1354,7 @@ function Stat({ label, value }) {
 function SectionHeader({ title }) {
   return (
     <div className="flex items-center gap-3 my-5">
-      <div
-        className="text-[9.5px] uppercase tracking-[0.25em] whitespace-nowrap"
-        style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
-      >
+      <div className="text-[9.5px] uppercase tracking-[0.25em] whitespace-nowrap" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
         {title}
       </div>
       <div className="h-px flex-1" style={{ background: PALETTE.border }} />
@@ -1519,13 +1364,8 @@ function SectionHeader({ title }) {
 
 function SettingRow({ label }) {
   return (
-    <button
-      className="w-full flex items-center justify-between py-3.5 px-1 text-left"
-      style={{ borderBottom: `1px solid ${PALETTE.border}` }}
-    >
-      <span className="text-[14px]" style={{ color: PALETTE.ink }}>
-        {label}
-      </span>
+    <button className="w-full flex items-center justify-between py-3.5 px-1 text-left" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
+      <span className="text-[14px]" style={{ color: PALETTE.ink }}>{label}</span>
       <ChevronRight size={15} strokeWidth={1.7} style={{ color: PALETTE.inkSoft }} />
     </button>
   );
@@ -1533,37 +1373,58 @@ function SettingRow({ label }) {
 
 function EmptyNote({ text }) {
   return (
-    <div
-      className="rounded-2xl p-5 text-center text-[13px]"
-      style={{
-        background: PALETTE.paper,
-        border: `1px dashed ${PALETTE.border}`,
-        color: PALETTE.inkSoft,
-        fontFamily: "'Fraunces', serif",
-        fontStyle: "italic",
-      }}
-    >
+    <div className="rounded-2xl p-5 text-center text-[13px]" style={{ background: PALETTE.paper, border: `1px dashed ${PALETTE.border}`, color: PALETTE.inkSoft, fontFamily: "'Fraunces', serif", fontStyle: "italic" }}>
       {text}
     </div>
   );
 }
 
 /* ============================================================
-   TIP FLOW (PayPal)
+   TIP FLOW — PayPal two-step
+   Step 1: POST /payments/tip/create-order
+           Body: { amount, currency, response_id, receiver_id }
+           Returns: { paypal_order_id, ... }
+   Step 2: POST /payments/tip/capture/{order_id}
+           Returns: TipOut with final paypal_status
 ============================================================ */
-function TipFlow({ ctx, onClose, onComplete }) {
+function TipFlow({ ctx, me, onClose, onComplete }) {
   const [step, setStep] = useState("amount"); // amount | approve | capturing | done
   const [amount, setAmount] = useState(5);
   const [custom, setCustom] = useState("");
-
-  useEffect(() => {
-    if (step === "capturing") {
-      const t = setTimeout(() => setStep("done"), 1400);
-      return () => clearTimeout(t);
-    }
-  }, [step]);
+  const [paypalOrderId, setPaypalOrderId] = useState(null);
+  const [error, setError] = useState(null);
 
   const finalAmount = custom ? Number(custom) || 0 : amount;
+
+  const handleCreateOrder = async () => {
+    if (!finalAmount || finalAmount <= 0) return;
+    setError(null);
+    try {
+      const data = await api.post("/payments/tip/create-order", {
+        amount: finalAmount,
+        currency: "USD",
+        response_id: ctx.response.id,
+        receiver_id: ctx.response.author_id,   // required by TipCreate schema
+      });
+      setPaypalOrderId(data.paypal_order_id);
+      setStep("approve");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const handleCapture = async () => {
+    if (!paypalOrderId) return;
+    setStep("capturing");
+    setError(null);
+    try {
+      await api.post(`/payments/tip/capture/${paypalOrderId}`);
+      setStep("done");
+    } catch (e) {
+      setError(e.message);
+      setStep("approve");
+    }
+  };
 
   return (
     <div
@@ -1574,43 +1435,24 @@ function TipFlow({ ctx, onClose, onComplete }) {
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full rounded-t-[36px] px-6 pt-5 pb-8 relative"
-        style={{
-          background: PALETTE.bg,
-          animation: "slideUp 320ms cubic-bezier(.2,.9,.3,1)",
-          maxHeight: "85%",
-          overflow: "auto",
-        }}
+        style={{ background: PALETTE.bg, animation: "slideUp 320ms cubic-bezier(.2,.9,.3,1)", maxHeight: "85%", overflow: "auto" }}
       >
         <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: PALETTE.border }} />
+
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-4 text-[13px]" style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep }}>
+            <AlertCircle size={14} />{error}
+          </div>
+        )}
 
         {step === "amount" && (
           <>
             <div className="text-center mb-1">
-              <div
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9.5,
-                  letterSpacing: "0.25em",
-                  color: PALETTE.inkSoft,
-                  textTransform: "uppercase",
-                }}
-              >
-                Tip
-              </div>
-              <h3
-                style={{
-                  fontFamily: "'Fraunces', serif",
-                  fontSize: 26,
-                  fontWeight: 400,
-                  letterSpacing: "-0.02em",
-                  color: PALETTE.ink,
-                  lineHeight: 1.1,
-                  marginTop: 4,
-                }}
-              >
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.25em", color: PALETTE.inkSoft, textTransform: "uppercase" }}>Tip</div>
+              <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 400, letterSpacing: "-0.02em", color: PALETTE.ink, lineHeight: 1.1, marginTop: 4 }}>
                 Buy{" "}
                 <span style={{ fontStyle: "italic", color: PALETTE.accent }}>
-                  {ctx.response.author.name.split(" ")[0]}
+                  {ctx.response.author?.name?.split(" ")[0]}
                 </span>{" "}
                 a coffee — or dinner.
               </h3>
@@ -1623,10 +1465,7 @@ function TipFlow({ ctx, onClose, onComplete }) {
               {[3, 5, 10, 20].map((a) => (
                 <button
                   key={a}
-                  onClick={() => {
-                    setAmount(a);
-                    setCustom("");
-                  }}
+                  onClick={() => { setAmount(a); setCustom(""); }}
                   className="py-4 rounded-2xl text-center transition-all active:scale-95"
                   style={{
                     background: !custom && amount === a ? PALETTE.ink : PALETTE.paper,
@@ -1634,26 +1473,12 @@ function TipFlow({ ctx, onClose, onComplete }) {
                     border: `1px solid ${!custom && amount === a ? PALETTE.ink : PALETTE.border}`,
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: "'Fraunces', serif",
-                      fontSize: 22,
-                      fontWeight: 400,
-                      lineHeight: 1,
-                    }}
-                  >
-                    ${a}
-                  </div>
+                  <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 400, lineHeight: 1 }}>${a}</div>
                 </button>
               ))}
             </div>
-            <div
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-5"
-              style={{
-                background: PALETTE.paper,
-                border: `1px solid ${custom ? PALETTE.ink : PALETTE.border}`,
-              }}
-            >
+
+            <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-5" style={{ background: PALETTE.paper, border: `1px solid ${custom ? PALETTE.ink : PALETTE.border}` }}>
               <span style={{ fontFamily: "'Fraunces', serif", fontSize: 18, color: PALETTE.inkSoft }}>$</span>
               <input
                 type="number"
@@ -1666,20 +1491,14 @@ function TipFlow({ ctx, onClose, onComplete }) {
             </div>
 
             <button
-              onClick={() => finalAmount > 0 && setStep("approve")}
-              disabled={!finalAmount}
+              onClick={handleCreateOrder}
+              disabled={!finalAmount || finalAmount <= 0}
               className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition flex items-center justify-center gap-2"
-              style={{
-                background: finalAmount ? "#0070BA" : PALETTE.border,
-                color: "#fff",
-              }}
+              style={{ background: finalAmount > 0 ? "#0070BA" : PALETTE.border, color: "#fff" }}
             >
               Continue to PayPal · ${finalAmount || 0}
             </button>
-            <div
-              className="text-center text-[10px] tracking-[0.2em] uppercase mt-3"
-              style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}
-            >
+            <div className="text-center text-[10px] tracking-[0.2em] uppercase mt-3" style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}>
               Secured by PayPal · Sandbox
             </div>
           </>
@@ -1687,56 +1506,29 @@ function TipFlow({ ctx, onClose, onComplete }) {
 
         {step === "approve" && (
           <div className="text-center py-4">
-            <div
-              className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: "#0070BA" }}
-            >
-              <span
-                style={{
-                  color: "#fff",
-                  fontFamily: "'Fraunces', serif",
-                  fontWeight: 700,
-                  fontSize: 24,
-                  fontStyle: "italic",
-                }}
-              >
-                P
-              </span>
+            <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: "#0070BA" }}>
+              <span style={{ color: "#fff", fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 24, fontStyle: "italic" }}>P</span>
             </div>
-            <h3
-              style={{
-                fontFamily: "'Fraunces', serif",
-                fontSize: 22,
-                fontWeight: 400,
-                color: PALETTE.ink,
-                letterSpacing: "-0.02em",
-              }}
-            >
+            <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 400, color: PALETTE.ink, letterSpacing: "-0.02em" }}>
               Approve in PayPal
             </h3>
             <p className="text-[13px] mt-2 mb-5" style={{ color: PALETTE.inkSoft }}>
-              You'll be redirected to PayPal to authorize the payment.
-              <br />Then we'll capture it on this side.
+              In production you'd approve on PayPal's site.<br />For sandbox, tap below to capture directly.
             </p>
-            <div
-              className="rounded-2xl p-4 text-left mb-5"
-              style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
-            >
-              <Row label="To" value={ctx.response.author.name} />
+            <div className="rounded-2xl p-4 text-left mb-5" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+              <Row label="To" value={ctx.response.author?.name} />
               <Row label="For" value={ctx.post.title} />
               <Row label="Amount" value={`$${finalAmount}.00`} />
-              <Row label="Order ID" value={`PP-${Math.random().toString(36).slice(2, 10).toUpperCase()}`} mono last />
+              <Row label="Order ID" value={paypalOrderId || "—"} mono last />
             </div>
             <button
-              onClick={() => setStep("capturing")}
+              onClick={handleCapture}
               className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition"
               style={{ background: "#0070BA", color: "#fff" }}
             >
               Approve & capture
             </button>
-            <button onClick={onClose} className="text-[12px] py-3 mt-1" style={{ color: PALETTE.inkSoft }}>
-              Cancel
-            </button>
+            <button onClick={onClose} className="text-[12px] py-3 mt-1" style={{ color: PALETTE.inkSoft }}>Cancel</button>
           </div>
         )}
 
@@ -1744,51 +1536,26 @@ function TipFlow({ ctx, onClose, onComplete }) {
           <div className="text-center py-12">
             <div
               className="mx-auto w-12 h-12 rounded-full mb-5"
-              style={{
-                border: `3px solid ${PALETTE.border}`,
-                borderTopColor: PALETTE.accent,
-                animation: "spin 800ms linear infinite",
-              }}
+              style={{ border: `3px solid ${PALETTE.border}`, borderTopColor: PALETTE.accent, animation: "spin 800ms linear infinite" }}
             />
-            <div
-              style={{
-                fontFamily: "'Fraunces', serif",
-                fontSize: 20,
-                fontStyle: "italic",
-                color: PALETTE.ink,
-              }}
-            >
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontStyle: "italic", color: PALETTE.ink }}>
               Capturing payment…
             </div>
-            <div
-              className="text-[10px] tracking-[0.25em] uppercase mt-2"
-              style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
-            >
-              POST /payments/tip/capture
+            <div className="text-[10px] tracking-[0.25em] uppercase mt-2" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
+              POST /payments/tip/capture/{paypalOrderId}
             </div>
           </div>
         )}
 
         {step === "done" && (
           <div className="text-center py-6">
-            <div
-              className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4"
-              style={{ background: PALETTE.green, color: PALETTE.paper }}
-            >
+            <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: PALETTE.green, color: PALETTE.paper }}>
               <Check size={28} strokeWidth={2.4} />
             </div>
-            <h3
-              style={{
-                fontFamily: "'Fraunces', serif",
-                fontSize: 26,
-                fontWeight: 400,
-                color: PALETTE.ink,
-                letterSpacing: "-0.02em",
-              }}
-            >
+            <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 26, fontWeight: 400, color: PALETTE.ink, letterSpacing: "-0.02em" }}>
               ${finalAmount} sent to{" "}
               <span style={{ fontStyle: "italic", color: PALETTE.accent }}>
-                {ctx.response.author.name.split(" ")[0]}
+                {ctx.response.author?.name?.split(" ")[0]}
               </span>
             </h3>
             <p className="text-[13px] mt-2 mb-6" style={{ color: PALETTE.inkSoft }}>
@@ -1810,24 +1577,11 @@ function TipFlow({ ctx, onClose, onComplete }) {
 
 function Row({ label, value, mono, last }) {
   return (
-    <div
-      className="flex justify-between items-center py-2"
-      style={{ borderBottom: last ? "none" : `1px dashed ${PALETTE.border}` }}
-    >
-      <span
-        className="text-[10px] uppercase tracking-[0.2em]"
-        style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
-      >
+    <div className="flex justify-between items-center py-2" style={{ borderBottom: last ? "none" : `1px dashed ${PALETTE.border}` }}>
+      <span className="text-[10px] uppercase tracking-[0.2em]" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
         {label}
       </span>
-      <span
-        className="text-[13px]"
-        style={{
-          color: PALETTE.ink,
-          fontFamily: mono ? "'JetBrains Mono', monospace" : "'DM Sans', sans-serif",
-          fontWeight: 500,
-        }}
-      >
+      <span className="text-[13px]" style={{ color: PALETTE.ink, fontFamily: mono ? "'JetBrains Mono', monospace" : "'DM Sans', sans-serif", fontWeight: 500 }}>
         {value}
       </span>
     </div>
@@ -1847,10 +1601,7 @@ function TopBar({ onBack, title }) {
       >
         <ArrowLeft size={16} strokeWidth={1.8} style={{ color: PALETTE.ink }} />
       </button>
-      <div
-        className="text-[10.5px] uppercase tracking-[0.3em]"
-        style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
-      >
+      <div className="text-[10.5px] uppercase tracking-[0.3em]" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
         {title}
       </div>
       <div className="w-10 h-10" />
@@ -1860,38 +1611,15 @@ function TopBar({ onBack, title }) {
 
 function TabBar({ screen, onHome, onCreate, onProfile }) {
   return (
-    <div
-      className="absolute bottom-0 left-0 right-0 px-6 pb-5 pt-3 z-30"
-      style={{
-        background: `linear-gradient(to top, ${PALETTE.bg} 70%, transparent)`,
-      }}
-    >
-      <div
-        className="flex items-center justify-between px-6 py-2 rounded-full"
-        style={{
-          background: PALETTE.ink,
-          color: PALETTE.paper,
-        }}
-      >
-        <button
-          onClick={onHome}
-          className="w-10 h-10 flex items-center justify-center rounded-full transition"
-          style={{ opacity: screen === "feed" ? 1 : 0.5 }}
-        >
+    <div className="absolute bottom-0 left-0 right-0 px-6 pb-5 pt-3 z-30" style={{ background: `linear-gradient(to top, ${PALETTE.bg} 70%, transparent)` }}>
+      <div className="flex items-center justify-between px-6 py-2 rounded-full" style={{ background: PALETTE.ink, color: PALETTE.paper }}>
+        <button onClick={onHome} className="w-10 h-10 flex items-center justify-center rounded-full transition" style={{ opacity: screen === "feed" ? 1 : 0.5 }}>
           <Home size={18} strokeWidth={1.8} />
         </button>
-        <button
-          onClick={onCreate}
-          className="w-12 h-12 flex items-center justify-center rounded-full active:scale-90 transition"
-          style={{ background: PALETTE.accent, color: PALETTE.paper }}
-        >
+        <button onClick={onCreate} className="w-12 h-12 flex items-center justify-center rounded-full active:scale-90 transition" style={{ background: PALETTE.accent, color: PALETTE.paper }}>
           <Plus size={20} strokeWidth={2} />
         </button>
-        <button
-          onClick={onProfile}
-          className="w-10 h-10 flex items-center justify-center rounded-full transition"
-          style={{ opacity: screen === "profile" ? 1 : 0.5 }}
-        >
+        <button onClick={onProfile} className="w-10 h-10 flex items-center justify-center rounded-full transition" style={{ opacity: screen === "profile" ? 1 : 0.5 }}>
           <User size={18} strokeWidth={1.8} />
         </button>
       </div>
@@ -1943,6 +1671,10 @@ function FontStyles() {
       }
       @keyframes spin {
         to { transform: rotate(360deg); }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 0.3; }
       }
 
       .no-scrollbar::-webkit-scrollbar { display: none; }
