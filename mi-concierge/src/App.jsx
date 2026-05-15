@@ -51,10 +51,9 @@ const PALETTE = {
 const CATEGORIES = [
   { id: "food", label: "Food", Icon: Utensils },
   { id: "nightlife", label: "Nightlife", Icon: Music },
-  { id: "sights", label: "Sights", Icon: Camera },
+  { id: "tourism", label: "Tourism", Icon: Camera },
   { id: "shopping", label: "Shopping", Icon: ShoppingBag },
-  { id: "transport", label: "Transport", Icon: Compass },
-  { id: "hidden", label: "Hidden", Icon: Sparkles },
+  { id: "activities", label: "Activities", Icon: Compass },
 ];
 
 const catIcon = (id) =>
@@ -1165,8 +1164,8 @@ function ResponseCard({ response, me, postAuthor, isMyPost, onRate, onTip, delay
             />
           )}
 
-          {/* Turista externo → ve el rating del dueño como texto */}
-          {isTourist && !isPostOwner && response.rating > 0 && (
+          {/* Local o turista externo → ve el rating del dueño del post */}
+          {(!isTourist || !isPostOwner) && response.rating > 0 && (
             <div
               className="flex items-center gap-1.5 text-[11px]"
               style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
@@ -1403,35 +1402,80 @@ function NewPost({ onBack, onSubmit }) {
 function Profile({ user, posts, onBack, onSignOut }) {
   const [avgRating, setAvgRating] = useState("—");
   const [myGivenRatings, setMyGivenRatings] = useState([]);
+  const [myPosts, setMyPosts] = useState([]);
+  const [myAnswers, setMyAnswers] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
 
   if (!user) return null;
 
-  const myPosts = posts.filter((p) => p.author_id === user.id);
-  const myAnswers = posts.flatMap((p) =>
-    p.responses
-      .filter((r) => r.author_id === user.id)
-      .map((r) => ({ ...r, post: p }))
-  );
   const tipsEarned = myAnswers.reduce((s, a) => s + (a.tipAmount || 0), 0);
-  const allResponses = myPosts.flatMap((p) => p.responses);
 
-  // Promedio real de ratings recibidos por el local
+  // Fetch all posts → extraer respuestas propias (local) o posts propios (tourist)
   useEffect(() => {
-    if (user.role !== "local" || myAnswers.length === 0) return;
+    api
+      .get("/posts/")
+      .then(async (data) => {
+        const allPosts = (data || []).map(mapPost);
 
-    Promise.all(
-      myAnswers.map((a) =>
-        api.get(`/ratings/${a.id}/average`).catch(() => null)
-      )
-    ).then((results) => {
-      const valid = results.filter((r) => r?.average !== null && r?.average !== undefined);
-      if (valid.length === 0) return;
-      const total = valid.reduce((s, r) => s + r.average, 0);
-      setAvgRating((total / valid.length).toFixed(1));
-    });
-  }, [myAnswers.length]);
+        if (user.role === "local") {
+          // Para cada post, fetch sus respuestas y filtrar las del local
+          const postsWithResponses = await Promise.all(
+            allPosts.map(async (p) => {
+              try {
+                const responses = await api.get(`/responses/${p.id}`);
+                return { ...p, responses: (responses || []).map(mapResponse) };
+              } catch {
+                return p;
+              }
+            })
+          );
 
-  // Ratings dados por el turista en respuestas de sus posts
+          // Respuestas propias del local
+          const answers = postsWithResponses.flatMap((p) =>
+            p.responses
+              .filter((r) => r.author_id === user.id)
+              .map((r) => ({ ...r, post: p }))
+          );
+
+          const answersWithRatings = await Promise.all(
+            answers.map(async (a) => {
+              try {
+                const data = await api.get(`/ratings/${a.id}/average`);
+                return { ...a, rating: data?.average ?? 0 };
+              } catch {
+                return a;
+              }
+            })
+          );
+          setMyAnswers(answersWithRatings);
+
+          // Calcular promedio de ratings recibidos
+          const rated = answersWithRatings.filter((a) => a.rating > 0);
+          if (rated.length > 0) {
+            const total = rated.reduce((s, a) => s + a.rating, 0);
+            setAvgRating((total / rated.length).toFixed(1));
+          }
+        } else {
+          // Tourist: posts propios con sus respuestas
+          const ownPosts = allPosts.filter((p) => p.author_id === user.id);
+          const withResponses = await Promise.all(
+            ownPosts.map(async (p) => {
+              try {
+                const responses = await api.get(`/responses/${p.id}`);
+                return { ...p, responses: (responses || []).map(mapResponse) };
+              } catch {
+                return p;
+              }
+            })
+          );
+          setMyPosts(withResponses);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPosts(false));
+  }, []);
+
+  // Ratings dados por el turista
   useEffect(() => {
     if (user.role !== "tourist") return;
 
@@ -1515,7 +1559,37 @@ function Profile({ user, posts, onBack, onSignOut }) {
                   "{a.body}"
                 </p>
                 <div className="flex items-center justify-between mt-2.5">
-                  <StarRating value={a.rating} />
+                  {a.rating > 0 ? (
+                    <div
+                      className="flex items-center gap-1.5 text-[11px]"
+                      style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      <span style={{ color: PALETTE.inkFaint }}>
+                        {a.post.author?.name?.split(" ")[0]} rated
+                      </span>
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <Star
+                            key={n}
+                            size={12}
+                            strokeWidth={1.5}
+                            fill={a.rating >= n ? PALETTE.gold : "transparent"}
+                            style={{ color: a.rating >= n ? PALETTE.gold : PALETTE.inkFaint }}
+                          />
+                        ))}
+                      </div>
+                      <span style={{ color: PALETTE.gold, fontWeight: 500 }}>
+                        {a.rating}.0
+                      </span>
+                    </div>
+                  ) : (
+                    <div
+                      className="text-[11px]"
+                      style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace", fontStyle: "italic" }}
+                    >
+                      Not rated yet
+                    </div>
+                  )}
                   {a.tipped && (
                     <span className="text-[10px] flex items-center gap-1" style={{ color: PALETTE.accentDeep, fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
                       <Heart size={9} fill={PALETTE.accentDeep} strokeWidth={2} />${a.tipAmount}
@@ -1525,6 +1599,11 @@ function Profile({ user, posts, onBack, onSignOut }) {
               </div>
             ))
           )
+        ) : loadingPosts ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
         ) : myPosts.length === 0 ? (
           <EmptyNote text="No questions yet. Ask one — a local is waiting." />
         ) : (
