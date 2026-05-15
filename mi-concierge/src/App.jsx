@@ -107,6 +107,7 @@ async function request(method, path, body) {
 const api = {
   get:    (path)       => request("GET",    path),
   post:   (path, body) => request("POST",   path, body),
+  put:    (path, body) => request("PUT",    path, body),
   patch:  (path, body) => request("PATCH",  path, body),
   delete: (path)       => request("DELETE", path),
 };
@@ -280,10 +281,16 @@ export default function App() {
   /* ── Rate response ── */
   const handleRate = async (postId, responseId, stars) => {
     try {
-      await api.post("/ratings/", {
-        response_id: responseId,        // backend field
-        score: stars,                   // backend uses "score" not "stars"
-      });
+      try {
+        await api.post("/ratings/", { response_id: responseId, score: stars });
+      } catch (e) {
+        // Ya existe → actualizar
+        if (e.message?.includes("Ya calificaste")) {
+          await api.put(`/ratings/${responseId}`, { response_id: responseId, score: stars });
+        } else {
+          throw e;
+        }
+      }
       setPosts((ps) =>
         ps.map((p) =>
           p.id !== postId
@@ -902,15 +909,36 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) 
     setLoadingResponses(true);
     api
       .get(`/responses/${post.id}`)
-      .then((data) => {
+      .then(async (data) => {
         const mapped = (data || []).map(mapResponse);
-        const updated = { ...post, responses: mapped };
+
+        const withRatings = await Promise.all(
+          mapped.map(async (r) => {
+            let myScore = 0;
+            let ownerScore = 0;
+
+            // Rating del usuario actual (para el dueño del post)
+            try {
+              const mine = await api.get(`/ratings/${r.id}/mine`);
+              myScore = mine?.score ?? 0;
+            } catch {}
+
+            // Rating del dueño del post (para turistas externos)
+            try {
+              const ownerRating = await api.get(`/ratings/${r.id}/by-post-author`);
+              ownerScore = ownerRating?.score ?? 0;
+            } catch {}
+
+            return { ...r, rating: myScore || ownerScore };
+          })
+        );
+
+        const updated = { ...post, responses: withRatings };
         setLocalPost(updated);
         onUpdatePost(updated);
       })
       .catch(() => {})
       .finally(() => setLoadingResponses(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
 
   // Keep localPost in sync if parent updates it (e.g. after a new reply)
@@ -995,6 +1023,8 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) 
           <ResponseCard
             key={r.id}
             response={r}
+            me={me}
+            postAuthor={localPost.author}
             isMyPost={isMyPost}
             onRate={(stars) => onRate(r.id, stars)}
             onTip={() => onTip(r)}
@@ -1035,15 +1065,30 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) 
   );
 }
 
-function ResponseCard({ response, isMyPost, onRate, onTip, delay }) {
+function ResponseCard({ response, me, postAuthor, isMyPost, onRate, onTip, delay }) {
   const [avgRating, setAvgRating] = useState(null);
 
-  useEffect(() => {
+  const isTourist = me?.role === "tourist";
+  const isPostOwner = me?.id === postAuthor?.id;
+
+  // Turista que NO es dueño del post → solo ve, no califica
+  const canRate = isTourist && isPostOwner;
+
+  const fetchAverage = () => {
     api
       .get(`/ratings/${response.id}/average`)
       .then((data) => setAvgRating(data.average))
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchAverage();
   }, [response.id]);
+
+  const handleRate = async (stars) => {
+    await onRate(stars);
+    fetchAverage();
+  };
 
   return (
     <div
@@ -1110,11 +1155,68 @@ function ResponseCard({ response, isMyPost, onRate, onTip, delay }) {
         className="flex items-center justify-between pt-3"
         style={{ borderTop: `1px dashed ${PALETTE.border}` }}
       >
-        <StarRating
-          value={response.rating}
-          average={avgRating}
-          onChange={isMyPost ? onRate : undefined}
-        />
+        <div className="flex flex-col gap-1.5">
+          {/* Dueño del post → puede calificar */}
+          {canRate && (
+            <StarRating
+              value={response.rating}
+              average={avgRating}
+              onChange={handleRate}
+            />
+          )}
+
+          {/* Turista externo → ve el rating del dueño como texto */}
+          {isTourist && !isPostOwner && response.rating > 0 && (
+            <div
+              className="flex items-center gap-1.5 text-[11px]"
+              style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
+            >
+              <span style={{ color: PALETTE.inkFaint }}>
+                {postAuthor?.name?.split(" ")[0]} rated
+              </span>
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star
+                    key={n}
+                    size={12}
+                    strokeWidth={1.5}
+                    fill={response.rating >= n ? PALETTE.gold : "transparent"}
+                    style={{ color: response.rating >= n ? PALETTE.gold : PALETTE.inkFaint }}
+                  />
+                ))}
+              </div>
+              <span style={{ color: PALETTE.gold, fontWeight: 500 }}>
+                {response.rating}.0
+              </span>
+            </div>
+          )}
+
+          {/* Turista externo sin rating aún */}
+          {isTourist && !isPostOwner && response.rating === 0 && avgRating === null && (
+            <div
+              className="text-[11px]"
+              style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace", fontStyle: "italic" }}
+            >
+              Not rated yet
+            </div>
+          )}
+
+          {/* Promedio — solo para no-dueños */}
+          {!isPostOwner && avgRating !== null && response.rating === 0 && (
+            <div
+              className="flex items-center gap-1 text-[10.5px]"
+              style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
+            >
+              <span
+                className="px-1.5 py-0.5 rounded-full font-medium"
+                style={{ background: PALETTE.accentSoft, color: PALETTE.gold }}
+              >
+                ★ {avgRating.toFixed(1)}
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-2">
           {response.tipped && (
             <span
@@ -1154,7 +1256,7 @@ function StarRating({ value, average, onChange }) {
     <div className="flex items-center gap-1.5">
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map((n) => {
-          const filled = (hover || value) >= n;
+          const filled = hover ? hover >= n : value >= n;
           return (
             <button
               key={n}
@@ -1162,7 +1264,7 @@ function StarRating({ value, average, onChange }) {
               onClick={() => onChange?.(n)}
               onMouseEnter={() => interactive && setHover(n)}
               onMouseLeave={() => interactive && setHover(0)}
-              className={`p-0.5 transition-transform ${interactive ? "active:scale-90" : ""}`}
+              className={`p-0.5 transition-transform ${interactive ? "active:scale-90 cursor-pointer" : ""}`}
               style={{ cursor: interactive ? "pointer" : "default" }}
             >
               <Star
@@ -1179,11 +1281,7 @@ function StarRating({ value, average, onChange }) {
       {average !== null && average !== undefined ? (
         <span
           className="text-[11px] font-medium px-1.5 py-0.5 rounded-full"
-          style={{
-            color: PALETTE.gold,
-            background: PALETTE.accentSoft,
-            fontFamily: "'JetBrains Mono', monospace",
-          }}
+          style={{ color: PALETTE.gold, background: PALETTE.accentSoft, fontFamily: "'JetBrains Mono', monospace" }}
         >
           {average.toFixed(1)}
         </span>
