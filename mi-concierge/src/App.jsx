@@ -26,6 +26,7 @@ import {
   Loader2,
   AlertCircle,
   MoreHorizontal,
+  Bell,
 } from "lucide-react";
 
 /* ============================================================
@@ -199,6 +200,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [authMode, setAuthMode] = useState("register");
+  const [profileSubscreen, setProfileSubscreen] = useState(null);
 
   /* ── Restore session on mount ── */
   useEffect(() => {
@@ -459,6 +461,7 @@ export default function App() {
                 user={user}
                 posts={posts}
                 onBack={goBack}
+                initialSubscreen={profileSubscreen}
                 onOpen={(id) => {
                   setActivePostId(id);
                   goTo("post");
@@ -478,9 +481,12 @@ export default function App() {
           {user && ["feed", "post", "profile"].includes(screen) && (
             <TabBar
               screen={screen}
+              activeTab={screen === "profile" ? (profileSubscreen === "notifications" ? "notifications" : "profile") : screen}
+              user={user}
               onHome={() => { setScreen("feed"); setHistory([]); }}
               onCreate={() => goTo("new")}
-              onProfile={() => { if (screen !== "profile") goTo("profile"); }}
+              onNotifications={() => { setProfileSubscreen("notifications"); if (screen !== "profile") goTo("profile"); }}
+              onProfile={() => { setProfileSubscreen(null); if (screen !== "profile") goTo("profile"); }}
             />
           )}
 
@@ -841,7 +847,7 @@ function Feed({ user, posts, setPosts, onOpen, onCreate, onProfile }) {
 
         {!loading && !error && posts.length === 0 && (
           <div className="text-center py-16 text-[14px]" style={{ color: PALETTE.inkSoft, fontStyle: "italic", fontFamily: "'Fraunces', serif" }}>
-            Nothing here yet. Be the first to ask.
+            {user?.role === "local" ? "Nothing here yet." : "Nothing here yet. Be the first to ask."}
           </div>
         )}
 
@@ -1620,13 +1626,17 @@ function EditPost({ post, onBack, onSave }) {
    PROFILE
    GET /users/me — re-fetched on mount to stay fresh
 ============================================================ */
-function Profile({ user, posts, onBack, onOpen, onUpdateUser, onSignOut }) {
+function Profile({ user, posts, onBack, onOpen, onUpdateUser, onSignOut, initialSubscreen = null }) {
   const [avgRating, setAvgRating] = useState("—");
   const [myGivenRatings, setMyGivenRatings] = useState([]);
   const [myPosts, setMyPosts] = useState([]);
   const [myAnswers, setMyAnswers] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
-  const [subscreen, setSubscreen] = useState(null);
+  const [subscreen, setSubscreen] = useState(initialSubscreen);
+
+  useEffect(() => {
+    setSubscreen(initialSubscreen);
+  }, [initialSubscreen]);
 
   const tipsEarned = myAnswers.reduce((s, a) => s + (a.tipAmount || 0), 0);
 
@@ -2523,17 +2533,24 @@ function TopBar({ onBack, title }) {
   );
 }
 
-function TabBar({ screen, onHome, onCreate, onProfile }) {
+function TabBar({ screen, activeTab, user, onHome, onCreate, onNotifications, onProfile }) {
+  const isLocal = user?.role === "local";
   return (
     <div className="absolute bottom-0 left-0 right-0 px-6 pb-5 pt-3 z-30" style={{ background: `linear-gradient(to top, ${PALETTE.bg} 70%, transparent)` }}>
       <div className="flex items-center justify-between px-6 py-2 rounded-full" style={{ background: PALETTE.ink, color: PALETTE.paper }}>
-        <button onClick={onHome} className="w-10 h-10 flex items-center justify-center rounded-full transition" style={{ opacity: screen === "feed" ? 1 : 0.5 }}>
+        <button onClick={onHome} className="w-10 h-10 flex items-center justify-center rounded-full transition" style={{ opacity: activeTab === "feed" ? 1 : 0.5 }}>
           <Home size={18} strokeWidth={1.8} />
         </button>
-        <button onClick={onCreate} className="w-12 h-12 flex items-center justify-center rounded-full active:scale-90 transition" style={{ background: PALETTE.accent, color: PALETTE.paper }}>
-          <Plus size={20} strokeWidth={2} />
-        </button>
-        <button onClick={onProfile} className="w-10 h-10 flex items-center justify-center rounded-full transition" style={{ opacity: screen === "profile" ? 1 : 0.5 }}>
+        {isLocal ? (
+          <button onClick={onNotifications} className="w-10 h-10 flex items-center justify-center rounded-full transition" style={{ opacity: activeTab === "notifications" ? 1 : 0.5 }}>
+            <Bell size={18} strokeWidth={1.8} />
+          </button>
+        ) : (
+          <button onClick={onCreate} className="w-12 h-12 flex items-center justify-center rounded-full active:scale-90 transition" style={{ background: PALETTE.accent, color: PALETTE.paper }}>
+            <Plus size={20} strokeWidth={2} />
+          </button>
+        )}
+        <button onClick={onProfile} className="w-10 h-10 flex items-center justify-center rounded-full transition" style={{ opacity: activeTab === "profile" ? 1 : 0.5 }}>
           <User size={18} strokeWidth={1.8} />
         </button>
       </div>
