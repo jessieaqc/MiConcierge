@@ -37,6 +37,9 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    city: Optional[str] = None
 
 # ── Posts ─────────────────────────────────────────────
 
