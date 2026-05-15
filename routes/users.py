@@ -31,6 +31,8 @@ def update_me(
         current_user.name = data.name
     if data.city is not None:
         current_user.city = data.city
+    if data.avatar_url is not None:        # ← agrega esto
+        current_user.avatar_url = data.avatar_url
     db.commit()
     db.refresh(current_user)
     return current_user

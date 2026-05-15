@@ -123,6 +123,7 @@ function mapUser(u) {
     email: u.email,
     role: u.role,
     city: u.city || "—",
+    avatarUrl: u.avatar_url || null,
     // frontend uses "from" everywhere
     from: u.city || "—",
     initials: u.name
@@ -746,10 +747,12 @@ function Feed({ user, posts, setPosts, onOpen, onCreate, onProfile }) {
           </div>
           <button
             onClick={onProfile}
-            className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium transition-transform active:scale-95"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-[13px] font-medium transition-transform active:scale-95 overflow-hidden"
             style={{ background: PALETTE.ink, color: PALETTE.paper, fontFamily: "'Fraunces', serif" }}
           >
-            {user?.initials || "U"}
+            {user?.avatarUrl
+              ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+              : user?.initials || "U"}
           </button>
         </div>
 
@@ -851,10 +854,12 @@ function PostCard({ post, onClick, delay = 0 }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[10.5px]"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[10.5px] overflow-hidden"
             style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'Fraunces', serif", fontWeight: 600 }}
           >
-            {post.author?.initials}
+            {post.author?.avatarUrl
+              ? <img src={post.author.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+              : post.author?.initials}
           </div>
           <div>
             <div className="text-[12.5px] font-medium leading-tight" style={{ color: PALETTE.ink }}>{post.author?.name}</div>
@@ -983,10 +988,12 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) 
 
           <div className="flex items-center gap-2 mt-4 pt-4" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
             <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px]"
+              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] overflow-hidden"
               style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'Fraunces', serif", fontWeight: 600 }}
             >
-              {localPost.author?.initials}
+              {localPost.author?.avatarUrl
+                ? <img src={localPost.author.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                : localPost.author?.initials}
             </div>
             <div className="text-[12px]" style={{ color: PALETTE.inkSoft }}>
               <span style={{ color: PALETTE.ink, fontWeight: 500 }}>{localPost.author?.name}</span>
@@ -1119,7 +1126,7 @@ function ResponseCard({ response, me, postAuthor, isMyPost, onRate, onTip, delay
 
       <div className="flex items-center gap-2 mb-3">
         <div
-          className="w-9 h-9 rounded-full flex items-center justify-center text-[11px]"
+          className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] overflow-hidden"
           style={{
             background: PALETTE.greenSoft,
             color: PALETTE.green,
@@ -1127,7 +1134,9 @@ function ResponseCard({ response, me, postAuthor, isMyPost, onRate, onTip, delay
             fontWeight: 600,
           }}
         >
-          {response.author?.initials}
+          {response.author?.avatarUrl
+            ? <img src={response.author.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+            : response.author?.initials}
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-1.5">
@@ -1531,10 +1540,12 @@ function Profile({ user, posts, onBack, onOpen, onUpdateUser, onSignOut }) {
           <div className="rounded-3xl p-6" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
             <div className="flex items-center gap-4 mb-5">
               <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-[22px]"
+                className="w-16 h-16 rounded-full flex items-center justify-center text-[22px] overflow-hidden"
                 style={{ background: PALETTE.ink, color: PALETTE.paper, fontFamily: "'Fraunces', serif", fontWeight: 500 }}
               >
-                {user.initials}
+                {user.avatarUrl
+                  ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                  : user.initials}
               </div>
               <div className="flex-1">
                 <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 400, lineHeight: 1.05, letterSpacing: "-0.02em", color: PALETTE.ink }}>
@@ -1736,10 +1747,11 @@ function EditProfile({ user, onBack, onSave }) {
     setLoading(true);
     setError(null);
     try {
-      const updated = await api.patch("/users/me", {
-        name: name.trim(),
-        city: city.trim() || null,
-      });
+    const updated = await api.patch("/users/me", {
+      name: name.trim(),
+      city: city.trim() || null,
+      avatar_url: avatar || null,
+    });
       onSave(mapUser(updated));
     } catch (e) {
       setError(e.message);

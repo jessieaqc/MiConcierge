@@ -32,6 +32,7 @@ class UserOut(BaseModel):
     email: EmailStr
     role: UserRole
     city: Optional[str]
+    avatar_url: Optional[str] = None   # ← agrega esto
     created_at: datetime
 
     class Config:
@@ -40,6 +41,7 @@ class UserOut(BaseModel):
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     city: Optional[str] = None
+    avatar_url: Optional[str] = None   # ← agrega esto
 
 # ── Posts ─────────────────────────────────────────────
 
