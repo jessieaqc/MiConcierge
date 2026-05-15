@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Concierge — API Tester</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3d;
+    --accent: #7c6aff;
+    --accent2: #ff6a8a;
+    --green: #4fffb0;
+    --yellow: #ffd166;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-display);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    padding: 24px 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.offline { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+
+  .token-display {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(124, 106, 255, 0.1);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(124, 106, 255, 0.2);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Layout */
+  .app {
+    display: grid;
+    grid-template-columns: 240px 1fr 380px;
+    flex: 1;
+    height: calc(100vh - 65px);
+  }
+
+  /* Sidebar */
+  nav {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    overflow-y: auto;
+  }
+
+  .nav-section {
+    padding: 0 16px;
+    margin-bottom: 24px;
+  }
+
+  .nav-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 8px;
+    margin-bottom: 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    border: 1px solid transparent;
+  }
+
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active {
+    background: rgba(124, 106, 255, 0.12);
+    color: var(--accent);
+    border-color: rgba(124, 106, 255, 0.25);
+  }
+
+  .method-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 3px;
+    min-width: 38px;
+    text-align: center;
+  }
+  .get  { background: rgba(79, 255, 176, 0.15); color: var(--green); }
+  .post { background: rgba(124, 106, 255, 0.15); color: var(--accent); }
+  .del  { background: rgba(255, 106, 138, 0.15); color: var(--accent2); }
+
+  /* Main panel */
+  main {
+    padding: 32px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .panel-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .panel-subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    margin-top: 4px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  input, select, textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124, 106, 255, 0.1);
+  }
+
+  textarea { resize: vertical; min-height: 80px; }
+
+  select option { background: var(--surface2); }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: #9580ff; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,106,255,0.3); }
+
+  .btn-danger {
+    background: rgba(255, 106, 138, 0.15);
+    color: var(--accent2);
+    border: 1px solid rgba(255, 106, 138, 0.3);
+  }
+  .btn-danger:hover { background: rgba(255, 106, 138, 0.25); }
+
+  .btn-ghost {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* Response panel */
+  .response-panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .response-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .response-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .response-status {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    display: none;
+  }
+
+  .response-status.success { background: rgba(79,255,176,0.1); color: var(--green); border: 1px solid rgba(79,255,176,0.2); display: block; }
+  .response-status.error   { background: rgba(255,106,138,0.1); color: var(--accent2); border: 1px solid rgba(255,106,138,0.2); display: block; }
+
+  .response-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .response-body.has-content { color: var(--text); }
+
+  /* Log */
+  .log-panel {
+    border-top: 1px solid var(--border);
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .log-header {
+    padding: 12px 24px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+  }
+
+  .log-entry {
+    padding: 8px 24px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    display: flex;
+    gap: 12px;
+    border-bottom: 1px solid rgba(42,42,61,0.5);
+    align-items: flex-start;
+  }
+
+  .log-time { color: var(--muted); white-space: nowrap; }
+  .log-method { min-width: 38px; }
+  .log-path { color: var(--text); flex: 1; }
+  .log-code.ok  { color: var(--green); }
+  .log-code.err { color: var(--accent2); }
+
+  /* Sections */
+  .section { display: none; flex-direction: column; gap: 16px; }
+  .section.active { display: flex; }
+
+  /* Spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+  .loading .spinner { display: block; }
+
+  /* Intro */
+  .intro {
+    background: linear-gradient(135deg, rgba(124,106,255,0.1), rgba(255,106,138,0.05));
+    border: 1px solid rgba(124,106,255,0.2);
+    border-radius: 12px;
+    padding: 20px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .intro strong { color: var(--text); }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(124,106,255,0.15);
+    color: var(--accent);
+    margin: 2px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Mi <span>Concierge</span> <span style="color:var(--muted);font-weight:400;font-size:14px">/ API Tester</span></div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Checking...</span>
+    </div>
+    <div class="token-display" id="tokenDisplay">No token — login first</div>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- Sidebar -->
+  <nav>
+    <div class="nav-section">
+      <div class="nav-label">Auth</div>
+      <div class="nav-item active" onclick="showSection('register')">
+        <span class="method-badge post">POST</span> Register
+      </div>
+      <div class="nav-item" onclick="showSection('login')">
+        <span class="method-badge post">POST</span> Login
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Users</div>
+      <div class="nav-item" onclick="showSection('me')">
+        <span class="method-badge get">GET</span> Me
+      </div>
+      <div class="nav-item" onclick="showSection('getUser')">
+        <span class="method-badge get">GET</span> By ID
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Posts</div>
+      <div class="nav-item" onclick="showSection('createPost')">
+        <span class="method-badge post">POST</span> Create
+      </div>
+      <div class="nav-item" onclick="showSection('listPosts')">
+        <span class="method-badge get">GET</span> List
+      </div>
+      <div class="nav-item" onclick="showSection('getPost')">
+        <span class="method-badge get">GET</span> By ID
+      </div>
+      <div class="nav-item" onclick="showSection('deletePost')">
+        <span class="method-badge del">DEL</span> Delete
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Responses</div>
+      <div class="nav-item" onclick="showSection('createResponse')">
+        <span class="method-badge post">POST</span> Create
+      </div>
+      <div class="nav-item" onclick="showSection('listResponses')">
+        <span class="method-badge get">GET</span> List
+      </div>
+      <div class="nav-item" onclick="showSection('deleteResponse')">
+        <span class="method-badge del">DEL</span> Delete
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Ratings</div>
+      <div class="nav-item" onclick="showSection('createRating')">
+        <span class="method-badge post">POST</span> Rate
+      </div>
+      <div class="nav-item" onclick="showSection('getRating')">
+        <span class="method-badge get">GET</span> Get
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main>
+
+    <!-- Register -->
+    <div class="section active" id="s-register">
+      <div>
+        <div class="panel-title">Register User</div>
+        <div class="panel-subtitle">POST /auth/register</div>
+      </div>
+      <div class="intro">
+        Creates a new account. Choose role <strong>tourist</strong> to create posts and rate responses, or <strong>local</strong> to answer posts.
+      </div>
+      <div class="card">
+        <div class="card-title">Request Body</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Name</label>
+              <input id="reg-name" placeholder="Ana García" />
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input id="reg-email" type="email" placeholder="ana@email.com" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Password</label>
+              <input id="reg-password" type="password" placeholder="••••••••" />
+            </div>
+            <div class="form-group">
+              <label>Role</label>
+              <select id="reg-role">
+                <option value="tourist">tourist</option>
+                <option value="local">local</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>City (optional)</label>
+            <input id="reg-city" placeholder="Ciudad de México" />
+          </div>
+          <button class="btn btn-primary" onclick="doRegister()">
+            <div class="spinner" id="reg-spinner"></div>
+            Register
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Login -->
+    <div class="section" id="s-login">
+      <div>
+        <div class="panel-title">Login</div>
+        <div class="panel-subtitle">POST /auth/login</div>
+      </div>
+      <div class="intro">Returns a <strong>JWT token</strong> that is automatically stored and used for all authenticated requests.</div>
+      <div class="card">
+        <div class="card-title">Credentials</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Email</label>
+            <input id="login-email" type="email" placeholder="ana@email.com" />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input id="login-password" type="password" placeholder="••••••••" />
+          </div>
+          <button class="btn btn-primary" onclick="doLogin()">
+            <div class="spinner" id="login-spinner"></div>
+            Login &amp; Save Token
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Me -->
+    <div class="section" id="s-me">
+      <div>
+        <div class="panel-title">Get My Profile</div>
+        <div class="panel-subtitle">GET /users/me</div>
+      </div>
+      <div class="intro">Returns the profile of the currently authenticated user. Requires a valid token.</div>
+      <div class="card">
+        <button class="btn btn-primary" onclick="doGetMe()">
+          <div class="spinner" id="me-spinner"></div>
+          Fetch My Profile
+        </button>
+      </div>
+    </div>
+
+    <!-- Get User -->
+    <div class="section" id="s-getUser">
+      <div>
+        <div class="panel-title">Get User by ID</div>
+        <div class="panel-subtitle">GET /users/{id}</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>User ID</label>
+            <input id="getuser-id" type="number" placeholder="1" />
+          </div>
+          <button class="btn btn-primary" onclick="doGetUser()">
+            <div class="spinner" id="getuser-spinner"></div>
+            Fetch User
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Post -->
+    <div class="section" id="s-createPost">
+      <div>
+        <div class="panel-title">Create Post</div>
+        <div class="panel-subtitle">POST /posts/</div>
+      </div>
+      <div class="intro">Only <strong>tourists</strong> can create posts. Make sure you're logged in as a tourist.</div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Title</label>
+            <input id="post-title" placeholder="Best tacos in CDMX?" />
+          </div>
+          <div class="form-group">
+            <label>Content</label>
+            <textarea id="post-content" placeholder="I'm visiting next week and looking for authentic tacos al pastor..."></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>City</label>
+              <input id="post-city" placeholder="Ciudad de México" />
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select id="post-category">
+                <option value="food">food</option>
+                <option value="tourism">tourism</option>
+                <option value="nightlife">nightlife</option>
+                <option value="shopping">shopping</option>
+                <option value="activities">activities</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="doCreatePost()">
+            <div class="spinner" id="createpost-spinner"></div>
+            Create Post
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- List Posts -->
+    <div class="section" id="s-listPosts">
+      <div>
+        <div class="panel-title">List Posts</div>
+        <div class="panel-subtitle">GET /posts/</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Filter by City (optional)</label>
+              <input id="list-city" placeholder="Ciudad de México" />
+            </div>
+            <div class="form-group">
+              <label>Filter by Category (optional)</label>
+              <select id="list-category">
+                <option value="">— all —</option>
+                <option value="food">food</option>
+                <option value="tourism">tourism</option>
+                <option value="nightlife">nightlife</option>
+                <option value="shopping">shopping</option>
+                <option value="activities">activities</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Skip</label>
+              <input id="list-skip" type="number" value="0" />
+            </div>
+            <div class="form-group">
+              <label>Limit</label>
+              <input id="list-limit" type="number" value="20" />
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="doListPosts()">
+            <div class="spinner" id="listposts-spinner"></div>
+            Fetch Posts
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Get Post -->
+    <div class="section" id="s-getPost">
+      <div>
+        <div class="panel-title">Get Post by ID</div>
+        <div class="panel-subtitle">GET /posts/{id}</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Post ID</label>
+            <input id="getpost-id" type="number" placeholder="1" />
+          </div>
+          <button class="btn btn-primary" onclick="doGetPost()">
+            <div class="spinner" id="getpost-spinner"></div>
+            Fetch Post
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Post -->
+    <div class="section" id="s-deletePost">
+      <div>
+        <div class="panel-title">Delete Post</div>
+        <div class="panel-subtitle">DELETE /posts/{id}</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Post ID</label>
+            <input id="delpost-id" type="number" placeholder="1" />
+          </div>
+          <button class="btn btn-danger" onclick="doDeletePost()">
+            <div class="spinner" id="delpost-spinner"></div>
+            Delete Post
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Response -->
+    <div class="section" id="s-createResponse">
+      <div>
+        <div class="panel-title">Create Response</div>
+        <div class="panel-subtitle">POST /responses/{post_id}</div>
+      </div>
+      <div class="intro">Only <strong>locals</strong> can respond to posts.</div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Post ID</label>
+            <input id="resp-postid" type="number" placeholder="1" />
+          </div>
+          <div class="form-group">
+            <label>Content</label>
+            <textarea id="resp-content" placeholder="You have to try El Huequito on Calle López, best pastor in the city..."></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="doCreateResponse()">
+            <div class="spinner" id="createresp-spinner"></div>
+            Submit Response
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- List Responses -->
+    <div class="section" id="s-listResponses">
+      <div>
+        <div class="panel-title">List Responses</div>
+        <div class="panel-subtitle">GET /responses/{post_id}</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Post ID</label>
+            <input id="listresp-postid" type="number" placeholder="1" />
+          </div>
+          <button class="btn btn-primary" onclick="doListResponses()">
+            <div class="spinner" id="listresp-spinner"></div>
+            Fetch Responses
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Response -->
+    <div class="section" id="s-deleteResponse">
+      <div>
+        <div class="panel-title">Delete Response</div>
+        <div class="panel-subtitle">DELETE /responses/{id}</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Response ID</label>
+            <input id="delresp-id" type="number" placeholder="1" />
+          </div>
+          <button class="btn btn-danger" onclick="doDeleteResponse()">
+            <div class="spinner" id="delresp-spinner"></div>
+            Delete Response
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Rating -->
+    <div class="section" id="s-createRating">
+      <div>
+        <div class="panel-title">Rate a Response</div>
+        <div class="panel-subtitle">POST /ratings/</div>
+      </div>
+      <div class="intro">Only <strong>tourists</strong> can rate. One rating per response.</div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Response ID</label>
+              <input id="rating-respid" type="number" placeholder="1" />
+            </div>
+            <div class="form-group">
+              <label>Score (0 – 5)</label>
+              <input id="rating-score" type="number" min="0" max="5" step="0.5" placeholder="4.5" />
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="doCreateRating()">
+            <div class="spinner" id="createrating-spinner"></div>
+            Submit Rating
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Get Rating -->
+    <div class="section" id="s-getRating">
+      <div>
+        <div class="panel-title">Get Rating</div>
+        <div class="panel-subtitle">GET /ratings/{response_id}</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>Response ID</label>
+            <input id="getrating-respid" type="number" placeholder="1" />
+          </div>
+          <button class="btn btn-primary" onclick="doGetRating()">
+            <div class="spinner" id="getrating-spinner"></div>
+            Fetch Rating
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Response panel -->
+  <div class="response-panel">
+    <div class="response-header">
+      <div class="response-title">Response</div>
+      <div class="response-status" id="responseStatus"></div>
+    </div>
+    <div class="response-body" id="responseBody">// Response will appear here</div>
+    <div class="log-panel">
+      <div class="log-header">Request Log</div>
+      <div id="logEntries"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const BASE = 'http://localhost:8000';
+  let token = null;
+
+  // ── Helpers ───────────────────────────────────────────
+  function headers(auth = true) {
+    const h = { 'Content-Type': 'application/json' };
+    if (auth && token) h['Authorization'] = `Bearer ${token}`;
+    return h;
+  }
+
+  function setLoading(id, on) {
+    const btn = document.getElementById(id)?.closest('button');
+    const spinner = document.getElementById(id);
+    if (spinner) spinner.style.display = on ? 'block' : 'none';
+    if (btn) btn.disabled = on;
+  }
+
+  function showResponse(status, data) {
+    const el = document.getElementById('responseBody');
+    const st = document.getElementById('responseStatus');
+    const ok = status >= 200 && status < 300;
+    el.textContent = JSON.stringify(data, null, 2);
+    el.classList.add('has-content');
+    st.textContent = status + (ok ? ' OK' : ' Error');
+    st.className = 'response-status ' + (ok ? 'success' : 'error');
+  }
+
+  function addLog(method, path, status) {
+    const ok = status >= 200 && status < 300;
+    const now = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    const mClass = method === 'GET' ? 'get' : method === 'DELETE' ? 'del' : 'post';
+    entry.innerHTML = `
+      <span class="log-time">${now}</span>
+      <span class="method-badge ${mClass} log-method">${method}</span>
+      <span class="log-path">${path}</span>
+      <span class="log-code ${ok ? 'ok' : 'err'}">${status}</span>
+    `;
+    const container = document.getElementById('logEntries');
+    container.prepend(entry);
+  }
+
+  async function call(method, path, body, spinnerId, auth = true) {
+    setLoading(spinnerId, true);
+    try {
+      const opts = { method, headers: headers(auth) };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(BASE + path, opts);
+      let data;
+      try { data = await res.json(); } catch { data = { status: res.status }; }
+      showResponse(res.status, data);
+      addLog(method, path, res.status);
+      return { ok: res.ok, data, status: res.status };
+    } catch (e) {
+      showResponse(0, { error: 'Network error — is the server running?', detail: e.message });
+      addLog(method, path, 0);
+    } finally {
+      setLoading(spinnerId, false);
+    }
+  }
+
+  // ── API Calls ─────────────────────────────────────────
+  async function doRegister() {
+    await call('POST', '/auth/register', {
+      name: document.getElementById('reg-name').value,
+      email: document.getElementById('reg-email').value,
+      password: document.getElementById('reg-password').value,
+      role: document.getElementById('reg-role').value,
+      city: document.getElementById('reg-city').value || null,
+    }, 'reg-spinner', false);
+  }
+
+  async function doLogin() {
+    const res = await call('POST', '/auth/login', {
+      email: document.getElementById('login-email').value,
+      password: document.getElementById('login-password').value,
+    }, 'login-spinner', false);
+    if (res?.ok && res.data?.access_token) {
+      token = res.data.access_token;
+      document.getElementById('tokenDisplay').textContent = token.substring(0, 40) + '…';
+      document.getElementById('statusDot').className = 'status-dot online';
+      document.getElementById('statusText').textContent = 'Authenticated';
+    }
+  }
+
+  async function doGetMe() {
+    await call('GET', '/users/me', null, 'me-spinner');
+  }
+
+  async function doGetUser() {
+    const id = document.getElementById('getuser-id').value;
+    await call('GET', `/users/${id}`, null, 'getuser-spinner');
+  }
+
+  async function doCreatePost() {
+    await call('POST', '/posts/', {
+      title: document.getElementById('post-title').value,
+      content: document.getElementById('post-content').value,
+      city: document.getElementById('post-city').value,
+      category: document.getElementById('post-category').value,
+    }, 'createpost-spinner');
+  }
+
+  async function doListPosts() {
+    const city = document.getElementById('list-city').value;
+    const cat  = document.getElementById('list-category').value;
+    const skip = document.getElementById('list-skip').value;
+    const lim  = document.getElementById('list-limit').value;
+    let qs = `?skip=${skip}&limit=${lim}`;
+    if (city) qs += `&city=${encodeURIComponent(city)}`;
+    if (cat)  qs += `&category=${cat}`;
+    await call('GET', `/posts/${qs}`, null, 'listposts-spinner');
+  }
+
+  async function doGetPost() {
+    const id = document.getElementById('getpost-id').value;
+    await call('GET', `/posts/${id}`, null, 'getpost-spinner');
+  }
+
+  async function doDeletePost() {
+    const id = document.getElementById('delpost-id').value;
+    await call('DELETE', `/posts/${id}`, null, 'delpost-spinner');
+  }
+
+  async function doCreateResponse() {
+    const postId = document.getElementById('resp-postid').value;
+    await call('POST', `/responses/${postId}`, {
+      content: document.getElementById('resp-content').value,
+    }, 'createresp-spinner');
+  }
+
+  async function doListResponses() {
+    const postId = document.getElementById('listresp-postid').value;
+    await call('GET', `/responses/${postId}`, null, 'listresp-spinner');
+  }
+
+  async function doDeleteResponse() {
+    const id = document.getElementById('delresp-id').value;
+    await call('DELETE', `/responses/${id}`, null, 'delresp-spinner');
+  }
+
+  async function doCreateRating() {
+    await call('POST', '/ratings/', {
+      response_id: parseInt(document.getElementById('rating-respid').value),
+      score: parseFloat(document.getElementById('rating-score').value),
+    }, 'createrating-spinner');
+  }
+
+  async function doGetRating() {
+    const id = document.getElementById('getrating-respid').value;
+    await call('GET', `/ratings/${id}`, null, 'getrating-spinner');
+  }
+
+  // ── Nav ───────────────────────────────────────────────
+  function showSection(name) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('s-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+    document.getElementById('responseBody').textContent = '// Response will appear here';
+    document.getElementById('responseBody').classList.remove('has-content');
+    document.getElementById('responseStatus').className = 'response-status';
+  }
+
+  // ── Health Check ──────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const res = await fetch(BASE + '/');
+      if (res.ok) {
+        document.getElementById('statusDot').className = 'status-dot online';
+        document.getElementById('statusText').textContent = 'API online';
+      } else throw new Error();
+    } catch {
+      document.getElementById('statusDot').className = 'status-dot offline';
+      document.getElementById('statusText').textContent = 'API offline';
+    }
+  }
+
+  checkHealth();
+  setInterval(checkHealth, 10000);
+</script>
+</body>
+</html>
