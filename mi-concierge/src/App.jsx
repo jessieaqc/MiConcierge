@@ -1401,6 +1401,9 @@ function NewPost({ onBack, onSubmit }) {
    GET /users/me — re-fetched on mount to stay fresh
 ============================================================ */
 function Profile({ user, posts, onBack, onSignOut }) {
+  const [avgRating, setAvgRating] = useState("—");
+  const [myGivenRatings, setMyGivenRatings] = useState([]);
+
   if (!user) return null;
 
   const myPosts = posts.filter((p) => p.author_id === user.id);
@@ -1410,9 +1413,36 @@ function Profile({ user, posts, onBack, onSignOut }) {
       .map((r) => ({ ...r, post: p }))
   );
   const tipsEarned = myAnswers.reduce((s, a) => s + (a.tipAmount || 0), 0);
-  const ratedAnswers = myAnswers.filter((a) => a.rating > 0);
-  const avgRating = ratedAnswers.length
-    ? (ratedAnswers.reduce((s, a) => s + a.rating, 0) / ratedAnswers.length).toFixed(1)
+  const allResponses = myPosts.flatMap((p) => p.responses);
+
+  // Promedio real de ratings recibidos por el local
+  useEffect(() => {
+    if (user.role !== "local" || myAnswers.length === 0) return;
+
+    Promise.all(
+      myAnswers.map((a) =>
+        api.get(`/ratings/${a.id}/average`).catch(() => null)
+      )
+    ).then((results) => {
+      const valid = results.filter((r) => r?.average !== null && r?.average !== undefined);
+      if (valid.length === 0) return;
+      const total = valid.reduce((s, r) => s + r.average, 0);
+      setAvgRating((total / valid.length).toFixed(1));
+    });
+  }, [myAnswers.length]);
+
+  // Ratings dados por el turista en respuestas de sus posts
+  useEffect(() => {
+    if (user.role !== "tourist") return;
+
+    api
+      .get("/ratings/given/me")
+      .then((data) => setMyGivenRatings(data || []))
+      .catch(() => {});
+  }, []);
+
+  const satisfactionAvg = myGivenRatings.length
+    ? (myGivenRatings.reduce((s, r) => s + r.score, 0) / myGivenRatings.length).toFixed(1)
     : "—";
 
   return (
@@ -1444,10 +1474,24 @@ function Profile({ user, posts, onBack, onSignOut }) {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 pt-4" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
-              <Stat label={user.role === "local" ? "Answers" : "Questions"} value={user.role === "local" ? myAnswers.length : myPosts.length} />
-              <Stat label="Avg. rating" value={avgRating} />
-              <Stat label={user.role === "local" ? "Earned" : "Tipped"} value={`$${tipsEarned}`} />
+
+            <div className="pt-4" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
+              {user.role === "local" ? (
+                <div className="grid grid-cols-3 gap-3">
+                  <Stat label="Answers" value={myAnswers.length} />
+                  <Stat label="Avg. rating" value={avgRating} />
+                  <Stat label="Earned" value={`$${tipsEarned}`} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <Stat label="Questions" value={myPosts.length} />
+                  <Stat label="Rated" value={myGivenRatings.length} />
+                  <Stat
+                    label="Satisfaction"
+                    value={satisfactionAvg === "—" ? "—" : `★ ${satisfactionAvg}`}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

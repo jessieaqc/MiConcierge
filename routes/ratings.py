@@ -41,6 +41,13 @@ def rate_response(
     db.refresh(rating)
     return rating
 
+@router.get("/given/me")
+def get_my_given_ratings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ratings = db.query(Rating).filter(Rating.rated_by == current_user.id).all()
+    return ratings
 
 @router.put("/{response_id}", response_model=RatingOut)
 def update_rating(
