@@ -65,6 +65,12 @@ class PostOut(BaseModel):
     class Config:
         from_attributes = True
 
+class PostUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    city: Optional[str] = None
+    category: Optional[PostCategory] = None
+
 
 # ── Responses ─────────────────────────────────────────
 

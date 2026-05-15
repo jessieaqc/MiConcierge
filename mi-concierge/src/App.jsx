@@ -25,6 +25,7 @@ import {
   Shield,
   Loader2,
   AlertCircle,
+  MoreHorizontal,
 } from "lucide-react";
 
 /* ============================================================
@@ -193,6 +194,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [posts, setPosts] = useState([]);
   const [activePostId, setActivePostId] = useState(null);
+  const [editingPost, setEditingPost] = useState(null);
   const [tipCtx, setTipCtx] = useState(null);
   const [toast, setToast] = useState(null);
   const [bootstrapping, setBootstrapping] = useState(true);
@@ -255,6 +257,39 @@ export default function App() {
       setScreen("feed");
       setHistory([]);
       showToast("Posted. Locals will see it shortly.");
+    } catch (e) {
+      showToast(e.message);
+    }
+  };
+
+  /* ── Edit post ── */
+  const handleEditPost = async (postId, postData) => {
+    try {
+      const updated = await api.patch(`/posts/${postId}`, {
+        title: postData.title,
+        content: postData.body,
+        city: postData.destination,
+        category: postData.category,
+      });
+      const mapped = mapPost(updated);
+      setPosts((ps) => ps.map((p) => (p.id === postId ? mapped : p)));
+      showToast("Post updated.");
+      setScreen("post");
+      setHistory((h) => h.filter((s) => s !== "edit-post"));
+      return mapped;
+    } catch (e) {
+      showToast(e.message);
+    }
+  };
+
+  /* ── Delete post ── */
+  const handleDeletePost = async (postId) => {
+    try {
+      await api.delete(`/posts/${postId}`);
+      setPosts((ps) => ps.filter((p) => p.id !== postId));
+      setScreen("feed");
+      setHistory([]);
+      showToast("Post deleted.");
     } catch (e) {
       showToast(e.message);
     }
@@ -407,6 +442,15 @@ export default function App() {
                 onUpdatePost={(updated) =>
                   setPosts((ps) => ps.map((p) => (p.id === updated.id ? updated : p)))
                 }
+                onOpenEdit={() => { setEditingPost(activePost); goTo("edit-post"); }}
+                onDeletePost={() => handleDeletePost(activePost.id)}
+              />
+            )}
+            {screen === "edit-post" && editingPost && (
+              <EditPost
+                post={editingPost}
+                onBack={goBack}
+                onSave={(postData) => handleEditPost(editingPost.id, postData)}
               />
             )}
             {screen === "new" && <NewPost onBack={goBack} onSubmit={handleNewPost} />}
@@ -905,11 +949,13 @@ function PostCard({ post, onClick, delay = 0 }) {
    Fetches responses fresh from GET /responses/{post_id}
    so ratings and tip state from the server are always current.
 ============================================================ */
-function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) {
+function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost, onOpenEdit, onDeletePost }) {
   const Icon = catIcon(post.category);
   const [reply, setReply] = useState("");
   const [loadingResponses, setLoadingResponses] = useState(true);
   const [localPost, setLocalPost] = useState(post);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const isMyPost = me?.id === post.author_id;
 
@@ -986,22 +1032,91 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) 
           </h2>
           <p className="text-[14.5px] leading-relaxed" style={{ color: PALETTE.ink }}>{localPost.body}</p>
 
-          <div className="flex items-center gap-2 mt-4 pt-4" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] overflow-hidden"
-              style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'Fraunces', serif", fontWeight: 600 }}
-            >
-              {localPost.author?.avatarUrl
-                ? <img src={localPost.author.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                : localPost.author?.initials}
+          <div className="flex items-center justify-between mt-4 pt-4" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] overflow-hidden"
+                style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'Fraunces', serif", fontWeight: 600 }}
+              >
+                {localPost.author?.avatarUrl
+                  ? <img src={localPost.author.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                  : localPost.author?.initials}
+              </div>
+              <div className="text-[12px]" style={{ color: PALETTE.inkSoft }}>
+                <span style={{ color: PALETTE.ink, fontWeight: 500 }}>{localPost.author?.name}</span>
+                {" · "}from {localPost.author?.from}
+                {" · "}{localPost.posted}
+              </div>
             </div>
-            <div className="text-[12px]" style={{ color: PALETTE.inkSoft }}>
-              <span style={{ color: PALETTE.ink, fontWeight: 500 }}>{localPost.author?.name}</span>
-              {" · "}from {localPost.author?.from}
-              {" · "}{localPost.posted}
-            </div>
+            {isMyPost && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu((v) => !v)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition"
+                  style={{ background: PALETTE.paperAlt, border: `1px solid ${PALETTE.border}` }}
+                >
+                  <MoreHorizontal size={15} strokeWidth={1.8} style={{ color: PALETTE.ink }} />
+                </button>
+                {showMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                    <div
+                      className="absolute right-0 top-10 z-50 rounded-2xl overflow-hidden min-w-[140px]"
+                      style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
+                    >
+                      <button
+                        onClick={() => { setShowMenu(false); onOpenEdit(); }}
+                        className="w-full px-4 py-3 text-left text-[13px] flex items-center gap-2 active:opacity-70"
+                        style={{ color: PALETTE.ink, borderBottom: `1px solid ${PALETTE.border}` }}
+                      >
+                        <Sparkles size={13} strokeWidth={1.7} />
+                        Edit post
+                      </button>
+                      <button
+                        onClick={() => { setShowMenu(false); setShowDeleteConfirm(true); }}
+                        className="w-full px-4 py-3 text-left text-[13px] flex items-center gap-2 active:opacity-70"
+                        style={{ color: PALETTE.accent }}
+                      >
+                        <Trash2 size={13} strokeWidth={1.7} />
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Delete confirmation */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-8" style={{ background: "rgba(26,19,12,0.5)" }}>
+            <div className="w-full max-w-sm rounded-3xl p-6" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+              <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 400, letterSpacing: "-0.02em", color: PALETTE.ink, marginBottom: 8 }}>
+                Delete this post?
+              </h3>
+              <p className="text-[13px] mb-6" style={{ color: PALETTE.inkSoft }}>
+                All responses will be lost too. This can't be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-3.5 rounded-full text-[14px] font-medium"
+                  style={{ background: PALETTE.paperAlt, color: PALETTE.ink, border: `1px solid ${PALETTE.border}` }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={onDeletePost}
+                  className="flex-1 py-3.5 rounded-full text-[14px] font-medium"
+                  style={{ background: PALETTE.accent, color: "#fff" }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Responses header */}
         <div className="flex items-center justify-between mb-3 px-1">
@@ -1403,6 +1518,98 @@ function NewPost({ onBack, onSubmit }) {
         >
           {loading && <Loader2 size={15} strokeWidth={2} style={{ animation: "spin 900ms linear infinite" }} />}
           Send to locals
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   EDIT POST
+   PATCH /posts/{id}
+============================================================ */
+function EditPost({ post, onBack, onSave }) {
+  const [destination, setDestination] = useState(post.destination);
+  const [category, setCategory] = useState(post.category);
+  const [title, setTitle] = useState(post.title);
+  const [body, setBody] = useState(post.body);
+  const [loading, setLoading] = useState(false);
+
+  const valid = destination.trim() && category && title.trim() && body.trim();
+
+  const handleSave = async () => {
+    if (!valid) return;
+    setLoading(true);
+    try {
+      await onSave({ destination, category, title, body });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <TopBar onBack={onBack} title="Edit post" />
+      <div className="flex-1 overflow-y-auto px-6 pb-8">
+        <div className="mb-5">
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5, letterSpacing: "0.25em", color: PALETTE.inkSoft, textTransform: "uppercase", marginBottom: 6 }}>
+            Editing dispatch
+          </div>
+          <h2 style={{ fontFamily: "'Fraunces', serif", fontWeight: 400, fontSize: 28, lineHeight: 1.05, letterSpacing: "-0.025em", color: PALETTE.ink }}>
+            Update your{" "}
+            <span style={{ fontStyle: "italic", color: PALETTE.accent }}>question.</span>
+          </h2>
+        </div>
+
+        <Label>Where</Label>
+        <Input value={destination} onChange={setDestination} placeholder="e.g. Lisbon, PT" />
+
+        <Label>About</Label>
+        <div className="flex flex-wrap gap-2 mb-6">
+          {CATEGORIES.map((c) => {
+            const active = category === c.id;
+            const Ic = c.Icon;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setCategory(c.id)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium transition-all active:scale-95"
+                style={{
+                  background: active ? PALETTE.ink : PALETTE.paper,
+                  color: active ? PALETTE.paper : PALETTE.ink,
+                  border: `1px solid ${active ? PALETTE.ink : PALETTE.border}`,
+                }}
+              >
+                <Ic size={12.5} strokeWidth={1.7} />
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <Label>Headline</Label>
+        <Input value={title} onChange={setTitle} placeholder="The question, in a sentence" />
+
+        <Label>The detail</Label>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={5}
+          placeholder="Tell us what you've already tried, what kind of answer you're looking for…"
+          className="w-full bg-transparent py-2.5 mb-2 text-[14px] outline-none resize-none"
+          style={{ borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.ink, fontFamily: "'DM Sans', sans-serif" }}
+        />
+      </div>
+
+      <div className="px-6 pb-6 pt-2">
+        <button
+          onClick={handleSave}
+          disabled={!valid || loading}
+          className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          style={{ background: valid ? PALETTE.ink : PALETTE.border, color: valid ? PALETTE.paper : PALETTE.inkSoft }}
+        >
+          {loading && <Loader2 size={15} strokeWidth={2} style={{ animation: "spin 900ms linear infinite" }} />}
+          Save changes
         </button>
       </div>
     </div>

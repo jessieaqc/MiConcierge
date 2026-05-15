@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from database.session import get_db
 from models.models import Post, User, UserRole, PostCategory
-from schemas.schemas import PostCreate, PostOut
+from schemas.schemas import PostCreate, PostOut, PostUpdate
 from utils.jwt import get_current_user
 
 router = APIRouter()
@@ -66,3 +66,23 @@ def delete_post(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para eliminar esta publicación")
     db.delete(post)
     db.commit()
+
+@router.patch("/{post_id}", response_model=PostOut)
+def update_post(
+    post_id: int,
+    data: PostUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Publicación no encontrada")
+    if post.author_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para editar esta publicación")
+
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(post, field, value)
+
+    db.commit()
+    db.refresh(post)
+    return post
