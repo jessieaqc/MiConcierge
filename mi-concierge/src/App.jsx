@@ -195,6 +195,7 @@ export default function App() {
   const [tipCtx, setTipCtx] = useState(null);
   const [toast, setToast] = useState(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [authMode, setAuthMode] = useState("register");
 
   /* ── Restore session on mount ── */
   useEffect(() => {
@@ -368,8 +369,13 @@ export default function App() {
           <Grain />
 
           <div className="relative flex-1 overflow-hidden flex flex-col">
-            {screen === "welcome" && <Welcome onStart={() => setScreen("auth")} />}
-            {screen === "auth" && <Auth onAuth={handleAuth} />}
+            {screen === "welcome" && (
+              <Welcome 
+                onStart={() => { setAuthMode("register"); setScreen("auth"); }} 
+                onSignIn={() => { setAuthMode("login"); setScreen("auth"); }} 
+              />
+            )}
+            {screen === "auth" && <Auth onAuth={handleAuth} initialMode={authMode} />}
             {screen === "feed" && (
               <Feed
                 user={user}
@@ -457,7 +463,7 @@ export default function App() {
 /* ============================================================
    WELCOME
 ============================================================ */
-function Welcome({ onStart }) {
+function Welcome({ onStart, onSignIn }) {
   return (
     <div className="flex-1 flex flex-col px-7 pt-16 pb-10 relative overflow-hidden">
       <div className="absolute top-6 right-6 flex flex-col items-end gap-1 opacity-80">
@@ -518,10 +524,7 @@ function Welcome({ onStart }) {
         <button
           className="text-[13px] py-2"
           style={{ color: PALETTE.inkSoft, fontFamily: "'DM Sans', sans-serif" }}
-          onClick={onStart}
-        >
-          I've been here before · Sign in
-        </button>
+          onClick={onSignIn}> I've been here before · Sign in </button>
       </div>
     </div>
   );
@@ -533,8 +536,8 @@ function Welcome({ onStart }) {
    - Login    → POST /auth/login    (returns Token)
    - After either: GET /users/me    (returns UserOut with full data)
 ============================================================ */
-function Auth({ onAuth }) {
-  const [mode, setMode] = useState("register");
+function Auth({ onAuth, initialMode = "register" }) {
+  const [mode, setMode] = useState(initialMode);
   const [role, setRole] = useState("tourist");
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
