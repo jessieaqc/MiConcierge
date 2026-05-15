@@ -415,9 +415,10 @@ export default function App() {
                 posts={posts}
                 onBack={goBack}
                 onOpen={(id) => {
-                      setActivePostId(id);
-                      goTo("post");
-                    }}
+                  setActivePostId(id);
+                  goTo("post");
+                }}
+                onUpdateUser={(updated) => setUser(updated)}
                 onSignOut={() => {
                   setToken(null);
                   setUser(null);
@@ -1403,14 +1404,13 @@ function NewPost({ onBack, onSubmit }) {
    PROFILE
    GET /users/me — re-fetched on mount to stay fresh
 ============================================================ */
-function Profile({ user, posts, onBack, onOpen, onSignOut }) {
+function Profile({ user, posts, onBack, onOpen, onUpdateUser, onSignOut }) {
   const [avgRating, setAvgRating] = useState("—");
   const [myGivenRatings, setMyGivenRatings] = useState([]);
   const [myPosts, setMyPosts] = useState([]);
   const [myAnswers, setMyAnswers] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
-
-  if (!user) return null;
+  const [subscreen, setSubscreen] = useState(null);
 
   const tipsEarned = myAnswers.reduce((s, a) => s + (a.tipAmount || 0), 0);
 
@@ -1492,6 +1492,30 @@ function Profile({ user, posts, onBack, onOpen, onSignOut }) {
   const satisfactionAvg = myGivenRatings.length
     ? (myGivenRatings.reduce((s, r) => s + r.score, 0) / myGivenRatings.length).toFixed(1)
     : "—";
+
+  if (!user) return null;
+
+  if (subscreen === "edit") {
+    return (
+      <EditProfile
+        user={user}
+        onBack={() => setSubscreen(null)}
+        onSave={(updated) => { onUpdateUser(updated); setSubscreen(null); }}
+      />
+    );
+  }
+
+  if (subscreen === "notifications") {
+    return (
+      <Notifications
+        user={user}
+        myPosts={myPosts}
+        myAnswers={myAnswers}
+        onBack={() => setSubscreen(null)}
+        onOpen={onOpen}
+      />
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -1627,9 +1651,9 @@ function Profile({ user, posts, onBack, onOpen, onSignOut }) {
         )}
 
         <SectionHeader title="Settings" />
-        <SettingRow label="Edit profile" />
+        <SettingRow label="Edit profile" onClick={() => setSubscreen("edit")} />
         <SettingRow label="Payment methods" />
-        <SettingRow label="Notifications" />
+        <SettingRow label="Notifications" onClick={() => setSubscreen("notifications")} />
         <SettingRow label="Help & community guidelines" />
         <button
           onClick={onSignOut}
@@ -1670,9 +1694,9 @@ function SectionHeader({ title }) {
   );
 }
 
-function SettingRow({ label }) {
+function SettingRow({ label, onClick }) {
   return (
-    <button className="w-full flex items-center justify-between py-3.5 px-1 text-left" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
+    <button onClick={onClick} className="w-full flex items-center justify-between py-3.5 px-1 text-left" style={{ borderBottom: `1px solid ${PALETTE.border}` }}>
       <span className="text-[14px]" style={{ color: PALETTE.ink }}>{label}</span>
       <ChevronRight size={15} strokeWidth={1.7} style={{ color: PALETTE.inkSoft }} />
     </button>
@@ -1683,6 +1707,237 @@ function EmptyNote({ text }) {
   return (
     <div className="rounded-2xl p-5 text-center text-[13px]" style={{ background: PALETTE.paper, border: `1px dashed ${PALETTE.border}`, color: PALETTE.inkSoft, fontFamily: "'Fraunces', serif", fontStyle: "italic" }}>
       {text}
+    </div>
+  );
+}
+
+/* ============================================================
+   EDIT PROFILE
+   PATCH /users/me — name, city
+============================================================ */
+function EditProfile({ user, onBack, onSave }) {
+  const [name, setName] = useState(user.name);
+  const [city, setCity] = useState(user.city === "—" ? "" : user.city);
+  const [avatar, setAvatar] = useState(user.avatarUrl || null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const fileRef = useRef(null);
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setAvatar(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await api.patch("/users/me", {
+        name: name.trim(),
+        city: city.trim() || null,
+      });
+      onSave(mapUser(updated));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initials = name.trim().split(/\s+/).slice(0, 2).map((s) => s[0]?.toUpperCase() || "").join("");
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <TopBar onBack={onBack} title="Edit profile" />
+      <div className="flex-1 overflow-y-auto px-6 pb-10">
+
+        {/* Avatar */}
+        <div className="flex flex-col items-center mt-4 mb-8">
+          <div className="relative">
+            <div
+              className="w-24 h-24 rounded-full flex items-center justify-center overflow-hidden"
+              style={{ background: PALETTE.ink, color: PALETTE.paper, fontFamily: "'Fraunces', serif", fontSize: 34, fontWeight: 500 }}
+            >
+              {avatar
+                ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                : initials}
+            </div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center shadow-md active:scale-90 transition"
+              style={{ background: PALETTE.accent, color: "#fff" }}
+            >
+              <Camera size={14} strokeWidth={2} />
+            </button>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+          <div className="mt-3 text-[10.5px] uppercase tracking-[0.2em]" style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}>
+            Tap to change photo
+          </div>
+        </div>
+
+        {/* Fields */}
+        <div className="mb-5">
+          <div className="text-[9.5px] uppercase tracking-[0.22em] mb-2" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
+            Name
+          </div>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full bg-transparent py-2.5 text-[15px] outline-none"
+            style={{ borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.ink, fontFamily: "'DM Sans', sans-serif" }}
+            placeholder="Your name"
+          />
+        </div>
+
+        <div className="mb-8">
+          <div className="text-[9.5px] uppercase tracking-[0.22em] mb-2" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
+            {user.role === "local" ? "Your city" : "Country / city"}
+          </div>
+          <input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            className="w-full bg-transparent py-2.5 text-[15px] outline-none"
+            style={{ borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.ink, fontFamily: "'DM Sans', sans-serif" }}
+            placeholder={user.role === "local" ? "e.g. Guadalajara, MX" : "e.g. New York, US"}
+          />
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-4 text-[13px]" style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep }}>
+            <AlertCircle size={14} strokeWidth={1.8} />
+            {error}
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={!name.trim() || loading}
+          className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition flex items-center justify-center gap-2"
+          style={{ background: name.trim() ? PALETTE.ink : PALETTE.border, color: name.trim() ? PALETTE.paper : PALETTE.inkSoft }}
+        >
+          {loading && <Loader2 size={15} strokeWidth={2} style={{ animation: "spin 900ms linear infinite" }} />}
+          Save changes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   NOTIFICATIONS
+   Tourist: respuestas recibidas en sus posts
+   Local: ratings recibidos en sus respuestas
+============================================================ */
+function Notifications({ user, myPosts, myAnswers, onBack, onOpen }) {
+  const notifs = [];
+
+  if (user.role === "tourist") {
+    for (const p of myPosts) {
+      for (const r of p.responses || []) {
+        notifs.push({
+          id: `r-${r.id}`,
+          type: "answer",
+          postId: p.id, 
+          title: p.title,
+          from: r.author?.name || "A local",
+          body: r.body,
+          posted: r.posted,
+        });
+      }
+    }
+  } else {
+    for (const a of myAnswers) {
+      if (a.rating > 0) {
+        notifs.push({
+          id: `rating-${a.id}`,
+          type: "rating",
+          postId: a.post?.id,
+          title: a.post?.title || "Your answer",
+          from: a.post?.author?.name || "A traveler",
+          rating: a.rating,
+          body: a.body,
+          posted: a.posted,
+        });
+      }
+    }
+  }
+
+  notifs.reverse();
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <TopBar onBack={onBack} title="Notifications" />
+      <div className="flex-1 overflow-y-auto px-6 pb-10">
+        {notifs.length === 0 ? (
+          <div className="mt-8">
+            <EmptyNote text={
+              user.role === "tourist"
+                ? "No notifications yet. Post a question and locals will answer."
+                : "No notifications yet. You'll see ratings here once travelers rate your answers."
+            } />
+          </div>
+        ) : (
+          <>
+            <div className="text-[9.5px] uppercase tracking-[0.22em] mb-4 mt-2" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
+              {notifs.length} {notifs.length === 1 ? "notification" : "notifications"}
+            </div>
+            {notifs.map((n, i) => (
+              <div
+                key={n.id}
+                onClick={() => n.postId && onOpen(n.postId)}
+                className="p-4 rounded-2xl mb-3 cursor-pointer active:scale-[0.98] transition-transform"
+                style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, animation: `fadeUp 400ms ${i * 60}ms ease-out both` }}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ background: n.type === "answer" ? PALETTE.greenSoft : PALETTE.accentSoft }}
+                  >
+                    {n.type === "answer"
+                      ? <MessageCircle size={15} strokeWidth={1.8} style={{ color: PALETTE.green }} />
+                      : <Star size={15} strokeWidth={1.8} fill={PALETTE.gold} style={{ color: PALETTE.gold }} />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <span className="text-[12.5px] font-medium truncate" style={{ color: PALETTE.ink }}>{n.from}</span>
+                      <span className="text-[10px] shrink-0" style={{ color: PALETTE.inkFaint, fontFamily: "'JetBrains Mono', monospace" }}>{n.posted}</span>
+                    </div>
+                    <div className="text-[11.5px] mb-1" style={{ color: PALETTE.inkSoft }}>
+                      {n.type === "answer"
+                        ? <>answered your question about <span style={{ color: PALETTE.ink, fontStyle: "italic" }}>"{n.title}"</span></>
+                        : <>rated your answer on <span style={{ color: PALETTE.ink, fontStyle: "italic" }}>"{n.title}"</span></>
+                      }
+                    </div>
+                    {n.type === "rating" ? (
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star key={s} size={12} strokeWidth={1.5}
+                            fill={n.rating >= s ? PALETTE.gold : "transparent"}
+                            style={{ color: n.rating >= s ? PALETTE.gold : PALETTE.inkFaint }}
+                          />
+                        ))}
+                        <span className="text-[10.5px] ml-1 font-medium" style={{ color: PALETTE.gold, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {n.rating}.0
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[12px] mt-1 line-clamp-2" style={{ color: PALETTE.ink, fontStyle: "italic" }}>
+                        "{n.body}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
     </div>
   );
 }
