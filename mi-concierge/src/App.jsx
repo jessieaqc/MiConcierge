@@ -1036,23 +1036,63 @@ function PostDetail({ post, me, onBack, onRate, onTip, onReply, onUpdatePost }) 
 }
 
 function ResponseCard({ response, isMyPost, onRate, onTip, delay }) {
+  const [avgRating, setAvgRating] = useState(null);
+
+  useEffect(() => {
+    api
+      .get(`/ratings/${response.id}/average`)
+      .then((data) => setAvgRating(data.average))
+      .catch(() => {});
+  }, [response.id]);
+
   return (
     <div
       className="p-5 rounded-3xl mb-4 relative"
-      style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}`, animation: `fadeUp 500ms ${delay}ms ease-out both` }}
+      style={{
+        background: PALETTE.paper,
+        border: `1px solid ${PALETTE.border}`,
+        animation: `fadeUp 500ms ${delay}ms ease-out both`,
+      }}
     >
-      <div className="absolute top-3 right-5 select-none" style={{ fontFamily: "'Fraunces', serif", fontSize: 56, fontStyle: "italic", color: PALETTE.accentSoft, lineHeight: 1, fontWeight: 300 }}>
+      <div
+        className="absolute top-3 right-5 select-none"
+        style={{
+          fontFamily: "'Fraunces', serif",
+          fontSize: 56,
+          fontStyle: "italic",
+          color: PALETTE.accentSoft,
+          lineHeight: 1,
+          fontWeight: 300,
+        }}
+      >
         "
       </div>
 
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px]" style={{ background: PALETTE.greenSoft, color: PALETTE.green, fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center text-[11px]"
+          style={{
+            background: PALETTE.greenSoft,
+            color: PALETTE.green,
+            fontFamily: "'Fraunces', serif",
+            fontWeight: 600,
+          }}
+        >
           {response.author?.initials}
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-[13px] font-medium" style={{ color: PALETTE.ink }}>{response.author?.name}</span>
-            <span className="text-[8.5px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-medium" style={{ background: PALETTE.green, color: PALETTE.paper, fontFamily: "'JetBrains Mono', monospace" }}>
+            <span className="text-[13px] font-medium" style={{ color: PALETTE.ink }}>
+              {response.author?.name}
+            </span>
+            <span
+              className="text-[8.5px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-medium"
+              style={{
+                background: PALETTE.green,
+                color: PALETTE.paper,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
               Local
             </span>
           </div>
@@ -1062,13 +1102,30 @@ function ResponseCard({ response, isMyPost, onRate, onTip, delay }) {
         </div>
       </div>
 
-      <p className="text-[14px] leading-relaxed mb-4" style={{ color: PALETTE.ink }}>{response.body}</p>
+      <p className="text-[14px] leading-relaxed mb-4" style={{ color: PALETTE.ink }}>
+        {response.body}
+      </p>
 
-      <div className="flex items-center justify-between pt-3" style={{ borderTop: `1px dashed ${PALETTE.border}` }}>
-        <StarRating value={response.rating} onChange={isMyPost ? onRate : undefined} />
+      <div
+        className="flex items-center justify-between pt-3"
+        style={{ borderTop: `1px dashed ${PALETTE.border}` }}
+      >
+        <StarRating
+          value={response.rating}
+          average={avgRating}
+          onChange={isMyPost ? onRate : undefined}
+        />
         <div className="flex items-center gap-2">
           {response.tipped && (
-            <span className="text-[10px] px-2 py-1 rounded-full flex items-center gap-1" style={{ background: PALETTE.accentSoft, color: PALETTE.accentDeep, fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
+            <span
+              className="text-[10px] px-2 py-1 rounded-full flex items-center gap-1"
+              style={{
+                background: PALETTE.accentSoft,
+                color: PALETTE.accentDeep,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 500,
+              }}
+            >
               <Heart size={9} strokeWidth={2} fill={PALETTE.accentDeep} />
               ${response.tipAmount} tipped
             </span>
@@ -1089,32 +1146,55 @@ function ResponseCard({ response, isMyPost, onRate, onTip, delay }) {
   );
 }
 
-function StarRating({ value, onChange }) {
+function StarRating({ value, average, onChange }) {
   const [hover, setHover] = useState(0);
   const interactive = !!onChange;
+
   return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => {
-        const filled = (hover || value) >= n;
-        return (
-          <button
-            key={n}
-            disabled={!interactive}
-            onClick={() => onChange?.(n)}
-            onMouseEnter={() => interactive && setHover(n)}
-            onMouseLeave={() => interactive && setHover(0)}
-            className={`p-0.5 transition-transform ${interactive ? "active:scale-90" : ""}`}
-            style={{ cursor: interactive ? "pointer" : "default" }}
-          >
-            <Star size={14} strokeWidth={1.5} fill={filled ? PALETTE.gold : "transparent"} style={{ color: filled ? PALETTE.gold : PALETTE.inkFaint }} />
-          </button>
-        );
-      })}
-      {value > 0 && (
-        <span className="text-[10.5px] ml-1" style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}>
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-0.5">
+        {[1, 2, 3, 4, 5].map((n) => {
+          const filled = (hover || value) >= n;
+          return (
+            <button
+              key={n}
+              disabled={!interactive}
+              onClick={() => onChange?.(n)}
+              onMouseEnter={() => interactive && setHover(n)}
+              onMouseLeave={() => interactive && setHover(0)}
+              className={`p-0.5 transition-transform ${interactive ? "active:scale-90" : ""}`}
+              style={{ cursor: interactive ? "pointer" : "default" }}
+            >
+              <Star
+                size={14}
+                strokeWidth={1.5}
+                fill={filled ? PALETTE.gold : "transparent"}
+                style={{ color: filled ? PALETTE.gold : PALETTE.inkFaint }}
+              />
+            </button>
+          );
+        })}
+      </div>
+
+      {average !== null && average !== undefined ? (
+        <span
+          className="text-[11px] font-medium px-1.5 py-0.5 rounded-full"
+          style={{
+            color: PALETTE.gold,
+            background: PALETTE.accentSoft,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}
+        >
+          {average.toFixed(1)}
+        </span>
+      ) : value > 0 ? (
+        <span
+          className="text-[10.5px] ml-1"
+          style={{ color: PALETTE.inkSoft, fontFamily: "'JetBrains Mono', monospace" }}
+        >
           {value}.0
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

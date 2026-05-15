@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from database.session import get_db
 from models.models import Rating, Response, User, UserRole
@@ -39,6 +40,20 @@ def rate_response(
     db.commit()
     db.refresh(rating)
     return rating
+
+
+@router.get("/{response_id}/average")
+def get_average_rating(
+    response_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    response = db.query(Response).filter(Response.id == response_id).first()
+    if not response:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Respuesta no encontrada")
+
+    avg = db.query(func.avg(Rating.score)).filter(Rating.response_id == response_id).scalar()
+    return {"response_id": response_id, "average": round(float(avg), 1) if avg else None}
 
 
 @router.get("/{response_id}", response_model=RatingOut)
