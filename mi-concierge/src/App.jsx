@@ -414,6 +414,10 @@ export default function App() {
                 user={user}
                 posts={posts}
                 onBack={goBack}
+                onOpen={(id) => {
+                      setActivePostId(id);
+                      goTo("post");
+                    }}
                 onSignOut={() => {
                   setToken(null);
                   setUser(null);
@@ -1399,7 +1403,7 @@ function NewPost({ onBack, onSubmit }) {
    PROFILE
    GET /users/me — re-fetched on mount to stay fresh
 ============================================================ */
-function Profile({ user, posts, onBack, onSignOut }) {
+function Profile({ user, posts, onBack, onOpen, onSignOut }) {
   const [avgRating, setAvgRating] = useState("—");
   const [myGivenRatings, setMyGivenRatings] = useState([]);
   const [myPosts, setMyPosts] = useState([]);
@@ -1547,7 +1551,7 @@ function Profile({ user, posts, onBack, onSignOut }) {
             <EmptyNote text="No answers yet. Open the feed and help someone out." />
           ) : (
             myAnswers.map((a) => (
-              <div key={a.id} className="p-4 rounded-2xl mb-3" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+              <div key={a.id} onClick={() => onOpen(a.post.id)} className="p-4 rounded-2xl mb-3 cursor-pointer active:scale-[0.98] transition-transform" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
                 <div className="text-[10.5px] uppercase tracking-[0.2em] mb-1" style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}>
                   <MapPin size={10} className="inline mr-1 -mt-0.5" strokeWidth={1.8} />
                   {a.post.destination}
@@ -1608,7 +1612,7 @@ function Profile({ user, posts, onBack, onSignOut }) {
           <EmptyNote text="No questions yet. Ask one — a local is waiting." />
         ) : (
           myPosts.map((p) => (
-            <div key={p.id} className="p-4 rounded-2xl mb-3" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+            <div key={p.id} onClick={() => onOpen(p.id)} className="p-4 rounded-2xl mb-3 cursor-pointer active:scale-[0.98] transition-transform" style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
               <div className="text-[10.5px] uppercase tracking-[0.2em] mb-1" style={{ color: PALETTE.accent, fontFamily: "'JetBrains Mono', monospace" }}>
                 {p.destination}
               </div>
