@@ -234,9 +234,9 @@ export default function App() {
     });
   };
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2400);
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
   };
 
   /* ── Auth ── */
@@ -260,7 +260,7 @@ export default function App() {
       setHistory([]);
       showToast("Posted. Locals will see it shortly.");
     } catch (e) {
-      showToast(e.message);
+      showToast(e.message, "error");
     }
   };
 
@@ -280,7 +280,7 @@ export default function App() {
       setHistory((h) => h.filter((s) => s !== "edit-post"));
       return mapped;
     } catch (e) {
-      showToast(e.message);
+      showToast(e.message, "error");
     }
   };
 
@@ -293,7 +293,7 @@ export default function App() {
       setHistory([]);
       showToast("Post deleted.");
     } catch (e) {
-      showToast(e.message);
+      showToast(e.message, "error");
     }
   };
 
@@ -311,7 +311,7 @@ export default function App() {
       );
       showToast("Reply sent.");
     } catch (e) {
-      showToast(e.message);
+      showToast(e.message, "error");
     }
   };
 
@@ -341,7 +341,7 @@ export default function App() {
         )
       );
     } catch (e) {
-      showToast(e.message);
+      showToast(e.message, "error");
     }
   };
 
@@ -453,9 +453,10 @@ export default function App() {
                 post={editingPost}
                 onBack={goBack}
                 onSave={(postData) => handleEditPost(editingPost.id, postData)}
+                onError={(msg) => showToast(msg, "error")}
               />
             )}
-            {screen === "new" && <NewPost onBack={goBack} onSubmit={handleNewPost} />}
+            {screen === "new" && <NewPost onBack={goBack} onSubmit={handleNewPost} onError={(msg) => showToast(msg, "error")} />}
             {screen === "profile" && (
               <Profile
                 user={user}
@@ -505,15 +506,18 @@ export default function App() {
             <div
               className="absolute bottom-24 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full text-sm font-medium z-50 flex items-center gap-2"
               style={{
-                background: PALETTE.ink,
+                background: toast.type === "error" ? PALETTE.accentDeep : PALETTE.ink,
                 color: PALETTE.paper,
                 fontFamily: "'DM Sans', sans-serif",
                 animation: "toastIn 240ms cubic-bezier(.2,.9,.3,1.2)",
                 whiteSpace: "nowrap",
+                maxWidth: "85%",
               }}
             >
-              <Check size={14} />
-              {toast}
+              {toast.type === "error"
+                ? <AlertCircle size={14} />
+                : <Check size={14} />}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{toast.msg}</span>
             </div>
           )}
         </div>
@@ -610,6 +614,18 @@ function Auth({ onAuth, initialMode = "register" }) {
 
   const submit = async () => {
     setError(null);
+
+    // Validación local antes de ir al backend
+    if (mode === "register") {
+      if (!name.trim()) { setError("Please enter your name."); return; }
+      if (name.trim().length < 2) { setError("Name must be at least 2 characters."); return; }
+      if (role === "local" && !city.trim()) { setError("Locals must enter their city."); return; }
+    }
+    if (!email.trim()) { setError("Please enter your email."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("That doesn't look like a valid email."); return; }
+    if (!password) { setError("Please enter a password."); return; }
+    if (mode === "register" && password.length < 6) { setError("Password must be at least 6 characters."); return; }
+
     setLoading(true);
     try {
       if (mode === "register") {
@@ -1437,7 +1453,7 @@ function StarRating({ value, average, onChange }) {
    "body" in UI → "content" in API
    "destination" in UI → "city" in API
 ============================================================ */
-function NewPost({ onBack, onSubmit }) {
+function NewPost({ onBack, onSubmit, onError }) {
   const [destination, setDestination] = useState("");
   const [category, setCategory] = useState("food");
   const [title, setTitle] = useState("");
@@ -1447,7 +1463,12 @@ function NewPost({ onBack, onSubmit }) {
   const valid = destination.trim() && title.trim() && body.trim();
 
   const handleSubmit = async () => {
-    if (!valid || loading) return;
+    if (loading) return;
+    if (!destination.trim()) { onError("Please enter a destination city."); return; }
+    if (!title.trim()) { onError("Please add a headline for your question."); return; }
+    if (title.trim().length < 5) { onError("Headline must be at least 5 characters."); return; }
+    if (!body.trim()) { onError("Please add some detail to your question."); return; }
+    if (body.trim().length < 10) { onError("Add a bit more detail — at least 10 characters."); return; }
     setLoading(true);
     try {
       await onSubmit({ destination, category, title, body });
@@ -1518,7 +1539,7 @@ function NewPost({ onBack, onSubmit }) {
       <div className="px-6 pb-6 pt-2">
         <button
           onClick={handleSubmit}
-          disabled={!valid || loading}
+          disabled={loading}
           className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           style={{ background: valid ? PALETTE.ink : PALETTE.border, color: valid ? PALETTE.paper : PALETTE.inkSoft }}
         >
@@ -1534,7 +1555,7 @@ function NewPost({ onBack, onSubmit }) {
    EDIT POST
    PATCH /posts/{id}
 ============================================================ */
-function EditPost({ post, onBack, onSave }) {
+function EditPost({ post, onBack, onSave, onError }) {
   const [destination, setDestination] = useState(post.destination);
   const [category, setCategory] = useState(post.category);
   const [title, setTitle] = useState(post.title);
@@ -1544,7 +1565,12 @@ function EditPost({ post, onBack, onSave }) {
   const valid = destination.trim() && category && title.trim() && body.trim();
 
   const handleSave = async () => {
-    if (!valid) return;
+    if (loading) return;
+    if (!destination.trim()) { onError("Please enter a destination city."); return; }
+    if (!title.trim()) { onError("Please add a headline."); return; }
+    if (title.trim().length < 5) { onError("Headline must be at least 5 characters."); return; }
+    if (!body.trim()) { onError("Please add some detail."); return; }
+    if (body.trim().length < 10) { onError("Add a bit more detail — at least 10 characters."); return; }
     setLoading(true);
     try {
       await onSave({ destination, category, title, body });
@@ -1610,7 +1636,7 @@ function EditPost({ post, onBack, onSave }) {
       <div className="px-6 pb-6 pt-2">
         <button
           onClick={handleSave}
-          disabled={!valid || loading}
+          disabled={loading}
           className="w-full py-4 rounded-full text-[15px] font-medium active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           style={{ background: valid ? PALETTE.ink : PALETTE.border, color: valid ? PALETTE.paper : PALETTE.inkSoft }}
         >
