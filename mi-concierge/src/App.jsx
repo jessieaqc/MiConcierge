@@ -2347,20 +2347,27 @@ function TipFlow({ ctx, me, onClose, onComplete }) {
   const finalAmount = custom ? Number(custom) || 0 : amount;
 
   const handleCreateOrder = async () => {
-    if (!finalAmount || finalAmount <= 0) return;
-    setError(null);
-    try {
-      const data = await api.post("/payments/tip/create-order", {
-        amount: finalAmount,
-        currency: "USD",
-        response_id: ctx.response.id,
-        receiver_id: ctx.response.author_id,   // required by TipCreate schema
-      });
-      setPaypalOrderId(data.paypal_order_id);
-      setStep("approve");
-    } catch (e) {
-      setError(e.message);
+  if (!finalAmount || finalAmount <= 0) return;
+  setError(null);
+  try {
+    const data = await api.post("/payments/tip/create-order", {
+      amount: finalAmount,
+      currency: "USD",
+      response_id: ctx.response.id,
+      receiver_id: ctx.response.author_id,
+    });
+    setPaypalOrderId(data.paypal_order_id);
+
+    // Open PayPal approval page automatically
+    const approveLink = data.links.find(l => l.rel === "approve");
+    if (approveLink) {
+      window.open(approveLink.href, "_blank");
     }
+
+    setStep("approve");
+  } catch (e) {
+    setError(e.message);
+  }
   };
 
   const handleCapture = async () => {
@@ -2368,7 +2375,7 @@ function TipFlow({ ctx, me, onClose, onComplete }) {
     setStep("capturing");
     setError(null);
     try {
-      await api.post(`/payments/tip/capture/${paypalOrderId}`);
+      await api.post(`/payments/tip/capture/${paypalOrderId}?response_id=${ctx.response.id}&receiver_id=${ctx.response.author_id}&amount=${finalAmount}&currency=USD`);
       setStep("done");
     } catch (e) {
       setError(e.message);
