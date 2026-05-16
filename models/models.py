@@ -31,7 +31,7 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    posts = relationship("Post", back_populates="author")
+    posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
     responses = relationship("Response", back_populates="author")
 
 
@@ -43,11 +43,15 @@ class Post(Base):
     content = Column(Text, nullable=False)
     city = Column(String(100), nullable=False)
     category = Column(Enum(PostCategory), nullable=False)
-    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    author_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     author = relationship("User", back_populates="posts")
-    responses = relationship("Response", back_populates="post")
+    responses = relationship(
+        "Response",
+        back_populates="post",
+        cascade="all, delete-orphan",  # al borrar un Post, borra sus Responses
+    )
 
 
 class Response(Base):
@@ -55,13 +59,19 @@ class Response(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     content = Column(Text, nullable=False)
-    post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     post = relationship("Post", back_populates="responses")
     author = relationship("User", back_populates="responses")
-    rating = relationship("Rating", back_populates="response", uselist=False)
+    rating = relationship(
+        "Rating",
+        back_populates="response",
+        uselist=False,
+        cascade="all, delete-orphan",  # al borrar una Response, borra su Rating
+    )
+    tips = relationship("Tip", back_populates="response", cascade="all, delete-orphan")
 
 
 class Rating(Base):
@@ -69,7 +79,7 @@ class Rating(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     score = Column(Float, nullable=False)  # 0.0 to 5.0
-    response_id = Column(Integer, ForeignKey("responses.id"), unique=True, nullable=False)
+    response_id = Column(Integer, ForeignKey("responses.id", ondelete="CASCADE"), unique=True, nullable=False)
     rated_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -86,5 +96,7 @@ class Tip(Base):
     paypal_status = Column(String(50), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     receiver_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    response_id = Column(Integer, ForeignKey("responses.id"), nullable=False)
+    response_id = Column(Integer, ForeignKey("responses.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    response = relationship("Response", back_populates="tips")

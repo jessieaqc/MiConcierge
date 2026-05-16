@@ -85,8 +85,12 @@ function loadStoredToken() {
 }
 
 async function request(method, path, body) {
-  const headers = { "Content-Type": "application/json" };
+  const headers = {};
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
+  // Only set Content-Type when we actually send a body.
+  // Sending Content-Type on a bodyless DELETE can trigger CORS pre-flight
+  // rejections or 4xx errors on some backends.
+  if (body !== undefined) headers["Content-Type"] = "application/json";
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -94,12 +98,19 @@ async function request(method, path, body) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 204) return null;
+  // 204 No Content or 205 Reset Content → no body to parse
+  if (res.status === 204 || res.status === 205) return null;
 
-  const data = await res.json().catch(() => ({}));
+  // Try to parse JSON; fall back to null so we don't throw on empty bodies
+  // that some servers send with 200 on DELETE.
+  const text = await res.text().catch(() => "");
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = null; }
 
   if (!res.ok) {
-    throw new Error(data.detail || `Error ${res.status}`);
+    throw new Error(
+      (data && (data.detail || data.message)) || `Error ${res.status}`
+    );
   }
 
   return data;
