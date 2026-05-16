@@ -1,8 +1,21 @@
-# Mi Concierge — Backend
+# Mi Concierge
 
-FastAPI + PostgreSQL backend for the Mi Concierge mobile app.
+Mi Concierge is a platform that connects travelers with locals. Ask a question about a city and someone who lives there will answer—the way they'd answer a friend. The project consists of a FastAPI backend and a React (Vite) frontend.
 
-## Setup
+---
+
+## Project Structure
+
+The repository is organized into two main parts:
+
+- **Backend (Root Directory)**: A FastAPI + PostgreSQL application that handles users, posts, responses, ratings, and tip payments via PayPal.
+- **Frontend (`/mi-concierge`)**: A React + Vite single-page application (SPA) styled with Tailwind CSS and Lucide React icons, acting as the mobile app interface.
+
+---
+
+## Backend Setup (FastAPI)
+
+The backend code lives in the root directory.
 
 ### 1. Create a virtual environment
 ```bash
@@ -31,60 +44,31 @@ alembic upgrade head
 ```bash
 uvicorn main:app --reload
 ```
-
 The API will be available at `http://localhost:8000`.  
 Interactive docs: `http://localhost:8000/docs`
 
 ---
 
-## Project Structure
+## Frontend Setup (React + Vite)
 
-```
-backend/
-├── main.py                  # FastAPI app entry point
-├── requirements.txt
-├── .env.example
-├── database/
-│   ├── session.py           # SQLAlchemy engine & session
-│   └── migrations/
-│       └── 0001_initial.py  # Alembic migration
-├── models/
-│   └── models.py            # SQLAlchemy ORM models
-├── schemas/
-│   └── schemas.py           # Pydantic request/response schemas
-├── routes/
-│   ├── auth.py              # POST /auth/register, /auth/login
-│   ├── users.py             # GET /users/me, /users/{id}
-│   ├── posts.py             # CRUD for tourist posts
-│   ├── responses.py         # CRUD for local responses
-│   ├── ratings.py           # Star ratings (0–5)
-│   └── payments.py          # PayPal tip flow
-└── utils/
-    ├── jwt.py               # Token creation & verification
-    └── hashing.py           # bcrypt password hashing
+The frontend code lives in the `mi-concierge` directory.
+
+### 1. Navigate to the frontend directory
+```bash
+cd mi-concierge
 ```
 
----
+### 2. Install dependencies
+```bash
+npm install
+```
 
-## API Endpoints
-
-| Method | Path | Description | Role |
-|--------|------|-------------|------|
-| POST | `/auth/register` | Register a new user | Public |
-| POST | `/auth/login` | Login and get JWT | Public |
-| GET | `/users/me` | Get current user profile | Any |
-| GET | `/users/{id}` | Get user by ID | Any |
-| POST | `/posts/` | Create a post | Tourist |
-| GET | `/posts/` | List posts (filter by city/category) | Any |
-| GET | `/posts/{id}` | Get a post | Any |
-| DELETE | `/posts/{id}` | Delete own post | Tourist |
-| POST | `/responses/{post_id}` | Reply to a post | Local |
-| GET | `/responses/{post_id}` | List responses for a post | Any |
-| DELETE | `/responses/{id}` | Delete own response | Local |
-| POST | `/ratings/` | Rate a response (0–5 stars) | Tourist |
-| GET | `/ratings/{response_id}` | Get rating for a response | Any |
-| POST | `/payments/tip/create-order` | Create PayPal tip order | Tourist |
-| POST | `/payments/tip/capture/{order_id}` | Capture PayPal payment | Tourist |
+### 3. Start the development server
+```bash
+npm run dev
+```
+The application will be available at `http://localhost:5173`.  
+Make sure your backend is running concurrently on port 8000 for the app to function properly.
 
 ---
 
@@ -103,7 +87,7 @@ Switch to `https://api-m.paypal.com` for production.
 
 ---
 
-## Deployment (Railway / Render)
+## Deployment
 
-Set all environment variables from `.env.example` in your deployment dashboard.  
-The `DATABASE_URL` should point to your Neon or Supabase PostgreSQL instance.
+- **Backend**: Can be deployed on platforms like Railway, Render, or Heroku. Ensure all environment variables from `.env.example` are set.
+- **Frontend**: Can be built using `npm run build` inside the `mi-concierge` directory and deployed on Vercel, Netlify, or similar static hosting platforms.
