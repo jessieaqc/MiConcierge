@@ -11,8 +11,8 @@ from utils.jwt import get_current_user
 
 load_dotenv()
 
-PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "")
-PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "")
+PAYPAL_CLIENT_ID = "AfGhBhNOzvNr0b__hVhNsnlEyY4J3gfsbb5cZo0d72JTQWS8nw1AjOwGuc6JuJUi0cqc76nO7fN5PD-0"
+PAYPAL_CLIENT_SECRET = "EIw4XUdYyx0YRT7N45iDGzMk9EijfZqi4Eh03KbhyLQCE4hYNhAEkUmWHD6or1Uppw30PPyvetzddwpa"
 PAYPAL_BASE_URL = os.getenv("PAYPAL_BASE_URL", "https://api-m.sandbox.paypal.com")
 
 router = APIRouter()
