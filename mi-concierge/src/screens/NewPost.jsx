@@ -17,6 +17,7 @@ export default function NewPost({ onBack, onSubmit, onError }) {
   const handleSubmit = async () => {
     if (loading) return;
     if (!destination.trim()) { onError("Please enter a destination city."); return; }
+    if (destination.trim().length < 2) { onError("Destination must be at least 2 characters."); return; }
     if (!title.trim()) { onError("Please add a headline for your question."); return; }
     if (title.trim().length < 5) { onError("Headline must be at least 5 characters."); return; }
     if (!body.trim()) { onError("Please add some detail to your question."); return; }
