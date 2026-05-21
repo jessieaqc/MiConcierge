@@ -471,6 +471,15 @@
         <span class="method-badge get">GET</span> Get
       </div>
     </div>
+    <div class="nav-section">
+      <div class="nav-label">Payments</div>
+      <div class="nav-item" onclick="showSection('createOrder')">
+        <span class="method-badge post">POST</span> Create Tip
+      </div>
+      <div class="nav-item" onclick="showSection('captureOrder')">
+        <span class="method-badge post">POST</span> Capture Tip
+      </div>
+    </div>
   </nav>
 
   <!-- Main -->
@@ -820,6 +829,92 @@
       </div>
     </div>
 
+    <!-- Create Tip Order -->
+    <div class="section" id="s-createOrder">
+      <div>
+        <div class="panel-title">Create Tip Order</div>
+        <div class="panel-subtitle">POST /payments/tip/create-order</div>
+      </div>
+      <div class="intro">
+        Step 1 of 2. Creates a PayPal order. After this, open the <strong>approve URL</strong> from the response in your browser and log in with your <strong>sandbox Personal account</strong> to approve the payment. Then use the order ID in <strong>Capture Tip</strong>.
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Amount</label>
+              <input id="order-amount" type="number" step="0.01" placeholder="5.00" />
+            </div>
+            <div class="form-group">
+              <label>Currency</label>
+              <input id="order-currency" value="USD" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Response ID</label>
+              <input id="order-respid" type="number" placeholder="1" />
+            </div>
+            <div class="form-group">
+              <label>Receiver User ID</label>
+              <input id="order-receiverid" type="number" placeholder="2" />
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="doCreateOrder()">
+            <div class="spinner" id="createorder-spinner"></div>
+            Create PayPal Order
+          </button>
+          <div id="approve-link-box" style="display:none;margin-top:8px;">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-family:var(--font-mono);">APPROVAL URL — open this in your browser to approve payment:</div>
+            <a id="approve-link" href="#" target="_blank" style="color:var(--accent);font-family:var(--font-mono);font-size:12px;word-break:break-all;"></a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Capture Tip Order -->
+    <div class="section" id="s-captureOrder">
+      <div>
+        <div class="panel-title">Capture Tip</div>
+        <div class="panel-subtitle">POST /payments/tip/capture/{order_id}</div>
+      </div>
+      <div class="intro">
+        Step 2 of 2. After approving the payment in PayPal, paste the <strong>PayPal Order ID</strong> here to finalize and record the tip in the database.
+      </div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="form-group">
+            <label>PayPal Order ID</label>
+            <input id="capture-orderid" placeholder="Paste order ID from step 1" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Response ID</label>
+              <input id="capture-respid" type="number" placeholder="1" />
+            </div>
+            <div class="form-group">
+              <label>Receiver User ID</label>
+              <input id="capture-receiverid" type="number" placeholder="2" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Amount</label>
+              <input id="capture-amount" type="number" step="0.01" placeholder="5.00" />
+            </div>
+            <div class="form-group">
+              <label>Currency</label>
+              <input id="capture-currency" value="USD" />
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="doCaptureOrder()">
+            <div class="spinner" id="captureorder-spinner"></div>
+            Capture Payment
+          </button>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <!-- Response panel -->
@@ -992,6 +1087,41 @@
     await call('GET', `/ratings/${id}`, null, 'getrating-spinner');
   }
 
+  async function doCreateOrder() {
+    const res = await call('POST', '/payments/tip/create-order', {
+      amount: parseFloat(document.getElementById('order-amount').value),
+      currency: document.getElementById('order-currency').value,
+      response_id: parseInt(document.getElementById('order-respid').value),
+      receiver_id: parseInt(document.getElementById('order-receiverid').value),
+    }, 'createorder-spinner');
+    if (res?.ok && res.data?.links) {
+      const approveLink = res.data.links.find(l => l.rel === 'approve');
+      if (approveLink) {
+        const box = document.getElementById('approve-link-box');
+        const link = document.getElementById('approve-link');
+        box.style.display = 'block';
+        link.href = approveLink.href;
+        link.textContent = approveLink.href;
+        // Auto-fill order ID in capture form
+        document.getElementById('capture-orderid').value = res.data.paypal_order_id;
+        document.getElementById('capture-respid').value = document.getElementById('order-respid').value;
+        document.getElementById('capture-receiverid').value = document.getElementById('order-receiverid').value;
+        document.getElementById('capture-amount').value = document.getElementById('order-amount').value;
+        document.getElementById('capture-currency').value = document.getElementById('order-currency').value;
+      }
+    }
+  }
+
+  async function doCaptureOrder() {
+    const orderId = document.getElementById('capture-orderid').value;
+    const respId = document.getElementById('capture-respid').value;
+    const receiverId = document.getElementById('capture-receiverid').value;
+    const amount = document.getElementById('capture-amount').value;
+    const currency = document.getElementById('capture-currency').value;
+    const qs = `?response_id=${respId}&receiver_id=${receiverId}&amount=${amount}&currency=${currency}`;
+    await call('POST', `/payments/tip/capture/${orderId}${qs}`, null, 'captureorder-spinner');
+  }
+  
   // ── Nav ───────────────────────────────────────────────
   function showSection(name) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
