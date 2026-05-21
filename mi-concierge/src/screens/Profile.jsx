@@ -265,7 +265,6 @@ export default function Profile({ user, posts, onBack, onOpen, onUpdateUser, onS
 
         <SectionHeader title="Settings" />
         <SettingRow label="Edit profile" onClick={() => setSubscreen("edit")} />
-        <SettingRow label="Payment methods" />
         <SettingRow label="Notifications" onClick={() => setSubscreen("notifications")} />
         <SettingRow label="Help & community guidelines" onClick={() => setSubscreen("help")} />
         <button
